@@ -1,0 +1,75 @@
+{
+  "name": "typelets-api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "A secure, encrypted notes management API with folder organization and file attachments",
+  "main": "dist/server.js",
+  "license": "MIT",
+  "keywords": [
+    "api",
+    "notes",
+    "encryption",
+    "hono",
+    "typescript",
+    "postgresql",
+    "drizzle"
+  ],
+  "author": "",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/typelets/typelets-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/typelets/typelets-api/issues"
+  },
+  "homepage": "https://github.com/typelets/typelets-api#readme",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write .",
+    "migrate": "drizzle-kit generate && drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "db:test": "tsx scripts/test-db.ts"
+  },
+  "dependencies": {
+    "@clerk/backend": "^2.5.0",
+    "@hono/node-server": "^1.15.0",
+    "@hono/zod-validator": "^0.7.0",
+    "dotenv": "^17.0.1",
+    "dotenv-flow": "^4.1.0",
+    "drizzle-orm": "^0.44.2",
+    "hono": "^4.8.3",
+    "postgres": "^3.4.7",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^11.0.5",
+    "@semantic-release/release-notes-generator": "^14.1.0",
+    "@types/node": "^24.0.10",
+    "@types/pg": "^8.15.4",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
+    "@typescript-eslint/parser": "^8.38.0",
+    "drizzle-kit": "^0.31.4",
+    "eslint": "^8.57.1",
+    "globals": "^16.3.0",
+    "jest": "^30.0.3",
+    "semantic-release": "^24.2.7",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "prettier": "^3.4.2"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9.15.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
