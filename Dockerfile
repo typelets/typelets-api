@@ -3,32 +3,38 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 # Copy package files
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml ./
 
 # Install dependencies
-RUN npm ci
+RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
 # Build the application
-RUN npm run build
+RUN pnpm build
 
 # Production stage
 FROM node:20-alpine AS production
 
 WORKDIR /app
 
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S typelets -u 1001
 
 # Copy package files
-COPY package*.json ./
+COPY package.json pnpm-lock.yaml ./
 
 # Install only production dependencies
-RUN npm ci --omit=dev && npm cache clean --force
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
@@ -45,4 +51,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
     CMD node -e "http.get('http://localhost:3000/', (res) => process.exit(res.statusCode === 200 ? 0 : 1))" || exit 1
 
 # Start the application
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]
