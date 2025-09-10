@@ -24,7 +24,7 @@
   "homepage": "https://github.com/typelets/typelets-api#readme",
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/server.ts",
-    "build": "rm -rf dist && esbuild src/server.ts src/version.ts src/**/*.ts --outdir=dist --platform=node --format=cjs --target=node20",
+    "build": "rm -rf dist && esbuild src/server.ts --bundle --platform=node --format=cjs --target=node20 --outfile=dist/server.js --packages=external",
     "start": "node dist/server.js",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
