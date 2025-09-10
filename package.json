@@ -24,7 +24,7 @@
   "homepage": "https://github.com/typelets/typelets-api#readme",
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/server.ts",
-    "build": "tsc",
+    "build": "esbuild src/**/*.ts --outdir=dist --platform=node --format=cjs --target=node20",
     "start": "node dist/server.js",
     "test": "jest",
     "lint": "eslint src/**/*.ts",
@@ -58,13 +58,14 @@
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
     "drizzle-kit": "^0.31.4",
+    "esbuild": "^0.25.9",
     "eslint": "^8.57.1",
     "globals": "^16.3.0",
     "jest": "^30.0.3",
+    "prettier": "^3.4.2",
     "semantic-release": "^24.2.7",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3",
-    "prettier": "^3.4.2"
+    "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=20",
