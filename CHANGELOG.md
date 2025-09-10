@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/typelets/typelets-api/compare/v1.0.0...v1.0.1) (2025-09-10)
+
+
+### Bug Fixes
+
+* update Dockerfile to use pnpm instead of npm ([13e9639](https://github.com/typelets/typelets-api/commit/13e963965c7e5fa0e060ba8a0d8995eee761620b))
+
 # 1.0.0 (2025-09-09)
 
 
