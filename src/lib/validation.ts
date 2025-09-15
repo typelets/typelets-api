@@ -65,7 +65,7 @@ export const updateNoteSchema = z.object({
 
 export const paginationSchema = z.object({
   page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
+  limit: z.coerce.number().min(1).max(50).default(20), // Reduced max limit for security
 });
 
 export const notesQuerySchema = z
@@ -75,7 +75,11 @@ export const notesQuerySchema = z
     archived: z.coerce.boolean().optional(),
     deleted: z.coerce.boolean().optional(),
     hidden: z.coerce.boolean().optional(),
-    search: z.string().max(100).optional(),
+    search: z
+      .string()
+      .max(100)
+      .regex(/^[a-zA-Z0-9\s\-_.,!?]+$/, "Search contains invalid characters") // Only allow safe characters
+      .optional(),
   })
   .merge(paginationSchema);
 
@@ -85,9 +89,48 @@ export const foldersQuerySchema = z
   })
   .merge(paginationSchema);
 
+// Allowed MIME types for security
+const allowedMimeTypes = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/pdf',
+  'text/plain',
+  'text/markdown',
+  'application/json',
+  'text/csv',
+] as const;
+
 export const uploadFileSchema = z.object({
-  originalName: z.string().min(1).max(255),
-  mimeType: z.string().min(1).max(100),
+  originalName: z
+    .string()
+    .min(1)
+    .max(255)
+    .refine(
+      (name) => {
+        // Check for dangerous characters and patterns
+        const dangerousChars = /[<>:"/\\|?*]/;
+        // Check for control characters (ASCII 0-31)
+        const hasControlChars = name.split('').some(char => {
+          const code = char.charCodeAt(0);
+          return code >= 0 && code <= 31;
+        });
+        const dangerousPatterns = /^\./; // Files starting with dot
+
+        return !dangerousChars.test(name) &&
+               !hasControlChars &&
+               !dangerousPatterns.test(name);
+      },
+      "Invalid filename characters"
+    ),
+  mimeType: z
+    .string()
+    .refine(
+      (type): type is typeof allowedMimeTypes[number] =>
+        allowedMimeTypes.includes(type as typeof allowedMimeTypes[number]),
+      "File type not allowed"
+    ),
   size: z
     .number()
     .int()

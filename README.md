@@ -18,6 +18,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - 📎 **File Attachments** with encrypted storage
 - 🏷️ **Tags & Search** for easy note discovery
 - 🗑️ **Trash & Archive** functionality
+- 🔄 **Real-time Sync** via WebSockets for multi-device support
 - ⚡ **Fast & Type-Safe** with TypeScript and Hono
 - 🐘 **PostgreSQL** with Drizzle ORM
 
@@ -91,6 +92,8 @@ pnpm run dev
 
 🎉 **Your API is now running at `http://localhost:3000`**
 
+**WebSocket connection available at: `ws://localhost:3000`**
+
 The development server will automatically restart when you make changes to any TypeScript files.
 
 ### Why This Setup?
@@ -156,6 +159,7 @@ If you prefer to install PostgreSQL locally instead of Docker:
 
 - `GET /` - API information and health status
 - `GET /health` - Health check endpoint
+- `GET /websocket/status` - WebSocket server status and statistics
 
 ### Authentication
 
@@ -195,6 +199,30 @@ All `/api/*` endpoints require authentication via Bearer token in the Authorizat
 - `GET /api/files/:id` - Get file details
 - `DELETE /api/files/:id` - Delete file attachment
 
+### WebSocket Real-time Sync
+
+The API provides real-time synchronization via WebSocket connection at `ws://localhost:3000` (or your configured port).
+
+**Connection Flow:**
+1. Connect to WebSocket endpoint
+2. Send authentication message with Clerk JWT token
+3. Join/leave specific notes for real-time updates
+4. Receive real-time sync messages for notes and folders
+
+**Message Types:**
+- `auth` - Authenticate with JWT token
+- `ping`/`pong` - Heartbeat messages
+- `join_note`/`leave_note` - Subscribe/unsubscribe from note updates
+- `note_update` - Real-time note content changes and folder moves
+- `note_created`/`note_deleted` - Note lifecycle events
+- `folder_created`/`folder_updated`/`folder_deleted` - Folder events
+
+**Security Features:**
+- JWT authentication required for all operations
+- Authorization checks ensure users only access their own notes/folders
+- Rate limiting (configurable, default: 300 messages per minute per connection)
+- Connection limits (configurable, default: 20 connections per user)
+
 ## Database Schema
 
 The application uses the following main tables:
@@ -211,22 +239,28 @@ The application uses the following main tables:
 - **Input Validation**: Comprehensive Zod schemas for all inputs
 - **SQL Injection Protection**: Parameterized queries via Drizzle ORM
 - **CORS Configuration**: Configurable allowed origins
-- **Rate Limiting**: Configurable file size limits (default: 50MB per file, 1GB total per note)
+- **File Size Limits**: Configurable limits (default: 50MB per file, 1GB total per note)
+- **WebSocket Security**: JWT authentication, rate limiting, and connection limits
+- **Real-time Authorization**: Database-level ownership validation for all WebSocket operations
 
 ## Environment Variables
 
-| Variable              | Description                                  | Required | Default     |
-| --------------------- | -------------------------------------------- | -------- | ----------- |
-| `DATABASE_URL`        | PostgreSQL connection string                 | Yes      | -           |
-| `CLERK_SECRET_KEY`    | Clerk secret key for JWT verification        | Yes      | -           |
-| `CORS_ORIGINS`        | Comma-separated list of allowed CORS origins | Yes      | -           |
-| `PORT`                | Server port                                  | No       | 3000        |
-| `NODE_ENV`            | Environment (development/production)         | No       | development |
-| `MAX_FILE_SIZE_MB`    | Maximum size per file in MB                  | No       | 50          |
-| `MAX_NOTE_SIZE_MB`    | Maximum total attachments per note in MB     | No       | 1024 (1GB)  |
-| `FREE_TIER_STORAGE_GB`| Free tier storage limit in GB               | No       | 1           |
-| `FREE_TIER_NOTE_LIMIT`| Free tier note count limit                  | No       | 100         |
-| `DEBUG`               | Enable debug logging in production           | No       | false       |
+| Variable                     | Description                                  | Required | Default     |
+| ---------------------------- | -------------------------------------------- | -------- | ----------- |
+| `DATABASE_URL`               | PostgreSQL connection string                 | Yes      | -           |
+| `CLERK_SECRET_KEY`           | Clerk secret key for JWT verification        | Yes      | -           |
+| `CORS_ORIGINS`               | Comma-separated list of allowed CORS origins | Yes      | -           |
+| `PORT`                       | Server port                                  | No       | 3000        |
+| `NODE_ENV`                   | Environment (development/production)         | No       | development |
+| `MAX_FILE_SIZE_MB`           | Maximum size per file in MB                  | No       | 50          |
+| `MAX_NOTE_SIZE_MB`           | Maximum total attachments per note in MB     | No       | 1024 (1GB)  |
+| `FREE_TIER_STORAGE_GB`       | Free tier storage limit in GB               | No       | 1           |
+| `FREE_TIER_NOTE_LIMIT`       | Free tier note count limit                  | No       | 100         |
+| `DEBUG`                      | Enable debug logging in production           | No       | false       |
+| `WS_RATE_LIMIT_WINDOW_MS`    | WebSocket rate limit window in milliseconds  | No       | 60000 (1 min) |
+| `WS_RATE_LIMIT_MAX_MESSAGES` | Max WebSocket messages per window            | No       | 300         |
+| `WS_MAX_CONNECTIONS_PER_USER`| Max WebSocket connections per user          | No       | 20          |
+| `WS_AUTH_TIMEOUT_MS`         | WebSocket authentication timeout in milliseconds | No   | 30000 (30 sec) |
 
 ## Development
 
@@ -240,15 +274,29 @@ src/
 ├── lib/
 │   └── validation.ts   # Zod validation schemas
 ├── middleware/
-│   └── auth.ts        # Authentication middleware
+│   ├── auth.ts         # Authentication middleware
+│   ├── rate-limit.ts   # Rate limiting middleware
+│   └── security.ts     # Security headers middleware
 ├── routes/
-│   ├── files.ts       # File attachment routes
-│   ├── folders.ts     # Folder management routes
-│   ├── notes.ts       # Note management routes
-│   └── users.ts       # User profile routes
+│   ├── files.ts        # File attachment routes
+│   ├── folders.ts      # Folder management routes
+│   ├── notes.ts        # Note management routes
+│   └── users.ts        # User profile routes
 ├── types/
-│   └── index.ts       # TypeScript type definitions
-└── server.ts          # Application entry point
+│   └── index.ts        # TypeScript type definitions
+├── websocket/
+│   ├── auth/
+│   │   └── handler.ts  # JWT authentication and HMAC verification
+│   ├── handlers/
+│   │   ├── base.ts     # Base handler for resource operations
+│   │   ├── notes.ts    # Note sync operations
+│   │   └── folders.ts  # Folder sync operations
+│   ├── middleware/
+│   │   ├── connection-manager.ts  # Connection tracking and cleanup
+│   │   └── rate-limiter.ts        # WebSocket rate limiting
+│   ├── types.ts        # WebSocket message types
+│   └── index.ts        # Main WebSocket server manager
+└── server.ts           # Application entry point
 ```
 
 ### Type Safety
