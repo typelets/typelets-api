@@ -298,7 +298,12 @@ foldersRouter.delete("/:id", async (c) => {
   try {
     await db.transaction(async (tx) => {
       // Delete the folder
-      await tx.delete(folders).where(eq(folders.id, folderId));
+      const deleteResult = await tx.delete(folders).where(eq(folders.id, folderId));
+
+      // Verify deletion succeeded
+      if (deleteResult.rowCount === 0) {
+        throw new Error(`Folder ${folderId} was not found or could not be deleted`);
+      }
 
       // Reorder remaining folders to fill the gap
       const remainingFolders = await tx.query.folders.findMany({
@@ -312,19 +317,31 @@ foldersRouter.delete("/:id", async (c) => {
       });
 
       // Update sort order for remaining folders
-      const updatePromises = remainingFolders.map((folder, index) =>
-        tx
-          .update(folders)
-          .set({ sortOrder: index })
-          .where(eq(folders.id, folder.id)),
-      );
+      if (remainingFolders.length > 0) {
+        const updatePromises = remainingFolders.map((folder, index) =>
+          tx
+            .update(folders)
+            .set({ sortOrder: index })
+            .where(eq(folders.id, folder.id)),
+        );
 
-      await Promise.all(updatePromises);
+        const updateResults = await Promise.all(updatePromises);
+
+        // Verify all updates succeeded
+        const failedUpdates = updateResults.filter(result => result.rowCount === 0);
+        if (failedUpdates.length > 0) {
+          throw new Error(`Failed to reorder ${failedUpdates.length} folder(s) after deletion`);
+        }
+      }
     });
 
     return c.json({ message: "Folder deleted successfully" });
-  } catch {
-    throw new HTTPException(500, { message: "Failed to delete folder" });
+  } catch (error) {
+    console.error(`Failed to delete folder ${folderId}:`, error);
+    throw new HTTPException(500, {
+      message: "Failed to delete folder",
+      cause: error instanceof Error ? error.message : "Unknown error"
+    });
   }
 });
 

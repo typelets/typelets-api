@@ -40,10 +40,16 @@ notesRouter.get("/", zValidator("query", notesQuerySchema), async (c) => {
   }
 
   if (query.search) {
+    // Escape special SQL LIKE characters to prevent injection
+    const escapedSearch = query.search
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%')
+      .replace(/_/g, '\\_');
+
     conditions.push(
       or(
-        ilike(notes.title, `%${query.search}%`),
-        ilike(notes.content, `%${query.search}%`),
+        ilike(notes.title, `%${escapedSearch}%`),
+        ilike(notes.content, `%${escapedSearch}%`),
       )!,
     );
   }

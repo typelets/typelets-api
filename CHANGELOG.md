@@ -49,6 +49,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Real-time WebSocket Sync**: Complete WebSocket implementation for real-time note and folder synchronization
+  - JWT authentication for WebSocket connections
+  - Optional HMAC-SHA256 message authentication for enhanced security
+  - Rate limiting (300 messages/min) and connection limits (20 per user)
+  - Connection management with automatic cleanup
+  - Note and folder sync across multiple devices/sessions
+  - Support for note folder moves via WebSocket
+- **Security Enhancements**:
+  - Comprehensive security headers middleware (CSP, HSTS, XSS protection)
+  - Enhanced rate limiting middleware
+  - Production-ready security configuration
+- **TypeScript Improvements**: Fixed iterator compatibility and module import issues
+- **Documentation**: Complete WebSocket integration documentation and updated security policy
+
+### Fixed
+
+- WebSocket note sync issue where `folderId` changes weren't being broadcast
+- TypeScript compilation issues with Map iterators and postgres module imports
+- Memory leak prevention in nonce storage with automatic cleanup
+
+### Previous Releases
+
 - Initial open source release
 - TypeScript API with Hono framework
 - PostgreSQL database with Drizzle ORM
