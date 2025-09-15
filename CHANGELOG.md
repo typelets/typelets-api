@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/typelets/typelets-api/compare/v1.0.4...v1.1.0) (2025-09-15)
+
+
+### Features
+
+* **websocket:** implement real-time sync with HMAC authentication and fix folder moves ([8de85b7](https://github.com/typelets/typelets-api/commit/8de85b7eae38b9af76154e40cdeff53d771f6e92))
+
 ## [1.0.4](https://github.com/typelets/typelets-api/compare/v1.0.3...v1.0.4) (2025-09-10)
 
 
