@@ -35,7 +35,7 @@ export const reorderFolderSchema = z.object({
 });
 
 export const createNoteSchema = z.object({
-  title: z.string().min(1, "Note title is required").max(200),
+  title: z.string().min(1).max(200).optional(),
   content: z.string().optional(),
   folderId: z.string().uuid().nullable().optional(),
   starred: z.boolean().optional(),
