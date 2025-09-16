@@ -1,3 +1,10 @@
+## [1.1.1](https://github.com/typelets/typelets-api/compare/v1.1.0...v1.1.1) (2025-09-16)
+
+
+### Bug Fixes
+
+* make note title field optional for encrypted notes ([ec19a48](https://github.com/typelets/typelets-api/commit/ec19a48954a10eb2a2531c3195fc5fe6b3430d70))
+
 # [1.1.0](https://github.com/typelets/typelets-api/compare/v1.0.4...v1.1.0) (2025-09-15)
 
 
