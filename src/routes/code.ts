@@ -70,11 +70,13 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
         statusCode = 503;
       }
 
+      clearTimeout(timeoutId);
       throw new HTTPException(statusCode, {
         message: clientMessage,
       });
     }
 
+    clearTimeout(timeoutId);
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
