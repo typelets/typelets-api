@@ -14,6 +14,7 @@ import foldersRouter from "./routes/folders";
 import notesRouter from "./routes/notes";
 import usersRouter from "./routes/users";
 import filesRouter from "./routes/files";
+import codeRouter from "./routes/code";
 import { VERSION } from "./version";
 
 const maxFileSize = process.env.MAX_FILE_SIZE_MB
@@ -41,6 +42,16 @@ app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // 100 file operations per window (increased from 10)
+  })
+);
+
+// Rate limiting for code execution (higher limits in development)
+const codeRateLimit = process.env.NODE_ENV === 'development' ? 200 : 50;
+app.use(
+  "/api/code/*",
+  rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: codeRateLimit, // Configurable based on environment
   })
 );
 
@@ -124,6 +135,7 @@ app.use("*", authMiddleware);
 app.route("/api/users", usersRouter);
 app.route("/api/folders", foldersRouter);
 app.route("/api/notes", notesRouter);
+app.route("/api/code", codeRouter);
 app.route("/api", filesRouter);
 
 app.onError((err, c) => {

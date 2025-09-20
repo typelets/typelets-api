@@ -21,6 +21,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - 🔄 **Real-time Sync** via WebSockets for multi-device support
 - ⚡ **Fast & Type-Safe** with TypeScript and Hono
 - 🐘 **PostgreSQL** with Drizzle ORM
+- 💻 **Code Execution** via secure Judge0 API proxy
 
 ## Tech Stack
 
@@ -37,6 +38,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - pnpm 9.15.0+
 - PostgreSQL database (local installation or Docker)
 - Clerk account for authentication ([sign up here](https://dashboard.clerk.com))
+- Judge0 API key for code execution (optional - [get from RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce))
 
 ## Local Development Setup
 
@@ -71,11 +73,14 @@ cp .env.example .env
 4. **Configure environment variables:**
    - Create a free account at [Clerk Dashboard](https://dashboard.clerk.com)
    - Create a new application
+   - (Optional) Get Judge0 API key from [RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce)
    - Update `.env` with your settings:
 
    ```env
    CLERK_SECRET_KEY=sk_test_your_actual_clerk_secret_key_from_dashboard
    CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+   # Optional: For code execution features
+   JUDGE0_API_KEY=your_judge0_rapidapi_key_here
    ```
 
 5. **Set up database schema:**
@@ -199,6 +204,13 @@ All `/api/*` endpoints require authentication via Bearer token in the Authorizat
 - `GET /api/files/:id` - Get file details
 - `DELETE /api/files/:id` - Delete file attachment
 
+### Code Execution (requires Judge0 API key)
+
+- `POST /api/code/execute` - Submit code for execution
+- `GET /api/code/status/:token` - Get execution status and results
+- `GET /api/code/languages` - Get supported programming languages
+- `GET /api/code/health` - Check Judge0 service connectivity
+
 ### WebSocket Real-time Sync
 
 The API provides real-time synchronization via WebSocket connection at `ws://localhost:3000` (or your configured port).
@@ -261,6 +273,9 @@ The application uses the following main tables:
 | `WS_RATE_LIMIT_MAX_MESSAGES` | Max WebSocket messages per window            | No       | 300         |
 | `WS_MAX_CONNECTIONS_PER_USER`| Max WebSocket connections per user          | No       | 20          |
 | `WS_AUTH_TIMEOUT_MS`         | WebSocket authentication timeout in milliseconds | No   | 30000 (30 sec) |
+| `JUDGE0_API_KEY`             | Judge0 API key for code execution            | No*      | -           |
+
+*Required only for code execution features
 
 ## Development
 
@@ -278,6 +293,7 @@ src/
 │   ├── rate-limit.ts   # Rate limiting middleware
 │   └── security.ts     # Security headers middleware
 ├── routes/
+│   ├── code.ts         # Code execution routes (Judge0 proxy)
 │   ├── files.ts        # File attachment routes
 │   ├── folders.ts      # Folder management routes
 │   ├── notes.ts        # Note management routes
