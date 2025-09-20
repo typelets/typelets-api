@@ -1,3 +1,12 @@
+# [1.2.0](https://github.com/typelets/typelets-api/compare/v1.1.1...v1.2.0) (2025-09-20)
+
+
+### Features
+
+* **ci:** add Husky pre-commit hooks to prevent CI failures ([346bc2b](https://github.com/typelets/typelets-api/commit/346bc2bcd087d5000b7cc21032561c60baf43dda))
+* **ci:** add Husky pre-commit hooks to prevent CI failures ([e2b1017](https://github.com/typelets/typelets-api/commit/e2b1017d1bbb133dd1067ef9234fb463ad89f15d))
+* **code:** add secure API proxy for code execution ([8d599b5](https://github.com/typelets/typelets-api/commit/8d599b5c6c72e3ae871a9cf71b9304fb8541828e))
+
 ## [1.1.1](https://github.com/typelets/typelets-api/compare/v1.1.0...v1.1.1) (2025-09-16)
 
 
