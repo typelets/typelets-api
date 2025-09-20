@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -e  # Exit on any command failure
+
+echo "🔍 Running pre-commit checks..."
+
+echo "📝 Running lint..."
+if ! pnpm run lint; then
+    echo "❌ Lint failed! Please fix the issues before committing."
+    exit 1
+fi
+
+echo "🏗️ Running build..."
+if ! NODE_OPTIONS="--max-old-space-size=8192" pnpm run build; then
+    echo "❌ Build failed! Please fix the issues before committing."
+    exit 1
+fi
+
+echo "✅ Pre-commit checks passed!"
