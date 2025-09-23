@@ -22,6 +22,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - ⚡ **Fast & Type-Safe** with TypeScript and Hono
 - 🐘 **PostgreSQL** with Drizzle ORM
 - 💻 **Code Execution** via secure Judge0 API proxy
+- 📊 **Performance Monitoring** with New Relic APM
 
 ## Tech Stack
 
@@ -30,6 +31,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - **Database**: PostgreSQL with [Drizzle ORM](https://orm.drizzle.team/)
 - **Authentication**: [Clerk](https://clerk.com/)
 - **Validation**: [Zod](https://zod.dev/)
+- **Monitoring**: [New Relic](https://newrelic.com/) for APM and error tracking
 - **TypeScript**: Strict mode enabled for type safety
 
 ## Prerequisites
@@ -39,6 +41,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - PostgreSQL database (local installation or Docker)
 - Clerk account for authentication ([sign up here](https://dashboard.clerk.com))
 - Judge0 API key for code execution (optional - [get from RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce))
+- New Relic account for monitoring (optional - [sign up here](https://newrelic.com/signup))
 
 ## Local Development Setup
 
@@ -74,6 +77,7 @@ cp .env.example .env
    - Create a free account at [Clerk Dashboard](https://dashboard.clerk.com)
    - Create a new application
    - (Optional) Get Judge0 API key from [RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce)
+   - (Optional) Get New Relic license key from [New Relic Dashboard](https://one.newrelic.com/launcher/api-keys-ui.api-keys-launcher)
    - Update `.env` with your settings:
 
    ```env
@@ -81,6 +85,8 @@ cp .env.example .env
    CORS_ORIGINS=http://localhost:5173,http://localhost:3000
    # Optional: For code execution features
    JUDGE0_API_KEY=your_judge0_rapidapi_key_here
+   # Optional: For performance monitoring and error tracking
+   NEW_RELIC_LICENSE_KEY=your_new_relic_license_key_here
    ```
 
 5. **Set up database schema:**
@@ -255,6 +261,54 @@ The application uses the following main tables:
 - **WebSocket Security**: JWT authentication, rate limiting, and connection limits
 - **Real-time Authorization**: Database-level ownership validation for all WebSocket operations
 
+## Performance Monitoring
+
+The API includes comprehensive monitoring via New Relic APM for production observability and performance optimization.
+
+### Monitoring Features
+
+- **Application Performance Monitoring (APM)**: Real-time performance metrics for HTTP requests, database queries, and external API calls
+- **Error Tracking**: Automatic error detection and alerting with detailed stack traces
+- **Custom Events**: Application startup, user authentication, and business logic events
+- **Transaction Tracing**: Detailed breakdown of slow requests and database operations
+- **Infrastructure Monitoring**: Server resources, memory usage, and system health
+
+### Environment-Specific Monitoring
+
+**Development Environment:**
+- App Name: `typelets-api-dev`
+- Debug-level logging with detailed instrumentation
+- Lower performance thresholds for early issue detection
+- Enhanced error collection and context
+
+**Production Environment:**
+- App Name: `typelets-api-prod`
+- Optimized logging for performance
+- High-security mode with sensitive data filtering
+- Production-tuned sampling rates
+
+### Monitored Operations
+
+- **HTTP Requests**: All API endpoints with response times and status codes
+- **Database Queries**: PostgreSQL operations with query performance tracking
+- **External APIs**: Judge0 API calls with latency and error monitoring
+- **WebSocket Operations**: Real-time connection management and message processing
+- **File Operations**: Upload/download performance and error tracking
+
+### New Relic Dashboard Access
+
+Once configured, monitor your application at:
+- Development: Search for `typelets-api-dev` in your New Relic dashboard
+- Production: Search for `typelets-api-prod` in your New Relic dashboard
+
+### Custom Monitoring
+
+The application sends custom events for business intelligence:
+- `ApplicationStartup`: Server initialization with configuration details
+- User authentication events with performance metrics
+- Slow operation alerts (configurable thresholds)
+- Resource usage patterns and scaling indicators
+
 ## Environment Variables
 
 | Variable                     | Description                                  | Required | Default     |
@@ -274,8 +328,13 @@ The application uses the following main tables:
 | `WS_MAX_CONNECTIONS_PER_USER`| Max WebSocket connections per user          | No       | 20          |
 | `WS_AUTH_TIMEOUT_MS`         | WebSocket authentication timeout in milliseconds | No   | 30000 (30 sec) |
 | `JUDGE0_API_KEY`             | Judge0 API key for code execution            | No*      | -           |
+| `NEW_RELIC_LICENSE_KEY`      | New Relic license key for APM monitoring     | No**     | -           |
+| `NEW_RELIC_APP_NAME`         | Custom New Relic application name            | No       | Auto-generated |
+| `NEW_RELIC_LOG`              | New Relic log output (stdout/stderr/filepath) | No      | stdout (dev) / file (prod) |
+| `NEW_RELIC_LOG_LEVEL`        | New Relic logging level (error/warn/info/debug/trace) | No | debug (dev) / info (prod) |
 
 *Required only for code execution features
+**Required only for performance monitoring and error tracking
 
 ## Development
 
@@ -334,6 +393,14 @@ docker build -t typelets-api .
 
 # 3. Run API container for local testing
 docker run -p 3000:3000 --env-file .env typelets-api
+
+# Or with explicit New Relic configuration
+docker run -p 3000:3000 \
+  -e NEW_RELIC_LICENSE_KEY=your_license_key_here \
+  -e NEW_RELIC_APP_NAME="typelets-api-dev" \
+  -e NODE_ENV=development \
+  --env-file .env \
+  typelets-api
 ```
 
 **This Docker setup is for local development and testing only.**
@@ -366,6 +433,25 @@ This application is designed for production deployment using AWS ECS (Elastic Co
 - **Never use**: Local testing setup in production
 
 For production deployment, configure the same environment variables in your ECS task definition that you use locally in `.env`.
+
+### Production Monitoring Setup
+
+For production deployments, ensure New Relic monitoring is properly configured:
+
+```bash
+# Example production environment variables in ECS task definition
+NODE_ENV=production
+NEW_RELIC_LICENSE_KEY=your_production_license_key
+NEW_RELIC_APP_NAME=typelets-api-prod
+NEW_RELIC_LOG=stdout
+NEW_RELIC_LOG_LEVEL=info
+```
+
+This will automatically:
+- Enable production-optimized monitoring settings
+- Filter sensitive data from logs and traces
+- Set appropriate sampling rates for production scale
+- Create separate application monitoring (dev vs prod)
 
 ## Contributing
 

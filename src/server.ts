@@ -1,5 +1,25 @@
 /// <reference lib="dom" />
 import "dotenv-flow/config";
+
+// Initialize New Relic FIRST - before any other imports
+import newrelic from "newrelic";
+
+// Log New Relic initialization
+const isDevelopment = process.env.NODE_ENV === 'development';
+const appName = isDevelopment ? 'typelets-api-dev' :
+                process.env.NODE_ENV === 'production' ? 'typelets-api-prod' :
+                'typelets-api-staging';
+
+console.log(`📊 New Relic initialized for: ${appName}`);
+console.log(`🔍 New Relic logging level: ${isDevelopment ? 'debug' : 'info'}`);
+
+// Add some custom attributes for the entire application
+newrelic.addCustomAttributes({
+  environment: process.env.NODE_ENV || 'development',
+  application: 'typelets-api',
+  version: process.env.npm_package_version || 'unknown'
+});
+
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
@@ -27,6 +47,41 @@ const app = new Hono();
 // Apply security headers first
 app.use("*", securityHeaders);
 
+// Add New Relic request logging middleware for development
+if (isDevelopment) {
+  app.use("*", async (c, next) => {
+    const start = Date.now();
+    const method = c.req.method;
+    const path = new URL(c.req.url).pathname;
+
+    console.log(`🌐 [${method}] ${path} - Request started`);
+
+    // Add request context to New Relic
+    newrelic.addCustomAttributes({
+      requestPath: path,
+      requestMethod: method,
+      userAgent: c.req.header('user-agent') || 'unknown'
+    });
+
+    await next();
+
+    const duration = Date.now() - start;
+    const status = c.res.status;
+    const emoji = status >= 200 && status < 300 ? '✅' :
+                  status >= 400 && status < 500 ? '⚠️' : '❌';
+
+    console.log(`${emoji} [${method}] ${path} - ${status} (${duration}ms)`);
+
+    // Track slow requests in New Relic
+    if (duration > 1000) {
+      newrelic.addCustomAttributes({
+        slowRequest: true,
+        responseTime: duration
+      });
+    }
+  });
+}
+
 // Apply rate limiting
 app.use(
   "*",
@@ -45,15 +100,7 @@ app.use(
   })
 );
 
-// Rate limiting for code execution (higher limits in development)
-const codeRateLimit = process.env.NODE_ENV === 'development' ? 200 : 50;
-app.use(
-  "/api/code/*",
-  rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: codeRateLimit, // Configurable based on environment
-  })
-);
+// Code execution rate limiting will be applied AFTER auth middleware
 
 app.use(
   "*",
@@ -132,6 +179,32 @@ app.get("/websocket/status", (c) => {
 
 app.use("*", authMiddleware);
 
+// Rate limiting for code execution - AFTER auth so users are properly identified
+const codeRateLimit = (() => {
+  if (process.env.CODE_EXEC_RATE_LIMIT_MAX) {
+    return parseInt(process.env.CODE_EXEC_RATE_LIMIT_MAX);
+  }
+  // More reasonable defaults now that we have per-user limits
+  return process.env.NODE_ENV === 'development' ? 100 : 50;
+})();
+
+const codeRateWindow = (() => {
+  if (process.env.CODE_EXEC_RATE_WINDOW_MS) {
+    return parseInt(process.env.CODE_EXEC_RATE_WINDOW_MS);
+  }
+  return 15 * 60 * 1000; // 15 minutes for both dev and prod
+})();
+
+console.log(`🔧 Code execution rate limit: ${codeRateLimit} requests per ${codeRateWindow / 1000 / 60} minutes`);
+
+app.use(
+  "/api/code/*",
+  rateLimit({
+    windowMs: codeRateWindow,
+    max: codeRateLimit,
+  })
+);
+
 app.route("/api/users", usersRouter);
 app.route("/api/folders", foldersRouter);
 app.route("/api/notes", notesRouter);
@@ -142,12 +215,28 @@ app.onError((err, c) => {
   // Generate unique error ID for tracking
   const errorId = crypto.randomUUID();
 
+  // Get user context
+  const userId = c.get("userId") || "anonymous";
+  const _userEmail = c.get("user")?.email;
+
   // Log full error details server-side only
   console.error(`[ERROR ${errorId}] API Error:`, err.message);
   console.error(`[ERROR ${errorId}] Stack:`, err.stack);
   console.error(`[ERROR ${errorId}] URL:`, c.req.url);
   console.error(`[ERROR ${errorId}] Method:`, c.req.method);
-  console.error(`[ERROR ${errorId}] User:`, c.get("userId") || "anonymous");
+  console.error(`[ERROR ${errorId}] User:`, userId);
+
+  // Send to New Relic with context
+  newrelic.addCustomAttributes({
+    errorId,
+    url: c.req.url,
+    method: c.req.method,
+    userId,
+    userAgent: c.req.header('user-agent') || 'unknown',
+    ip: c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
+    statusCode: err instanceof HTTPException ? err.status : 500
+  });
+  newrelic.noticeError(err);
 
   if (err instanceof HTTPException) {
     // Log usage limit errors for billing analytics
@@ -209,6 +298,7 @@ const port = Number(process.env.PORT) || 3000;
 const freeStorageGB = process.env.FREE_TIER_STORAGE_GB ? parseFloat(process.env.FREE_TIER_STORAGE_GB) : 1;
 const freeNoteLimit = process.env.FREE_TIER_NOTE_LIMIT ? parseInt(process.env.FREE_TIER_NOTE_LIMIT) : 100;
 
+
 console.log(
   "🚀 Typelets API v" + VERSION + " started at:",
   new Date().toISOString(),
@@ -219,6 +309,22 @@ console.log(
 );
 console.log(`💰 Free tier limits: ${freeStorageGB}GB storage, ${freeNoteLimit} notes`);
 console.log(`🌐 CORS origins:`, corsOrigins);
+
+// Send application startup event to New Relic
+newrelic.recordCustomEvent('ApplicationStartup', {
+  version: VERSION,
+  environment: process.env.NODE_ENV || 'development',
+  port: port,
+  maxFileSize: maxFileSize,
+  freeStorageGB: freeStorageGB,
+  freeNoteLimit: freeNoteLimit,
+  corsOrigins: corsOrigins.length,
+  nodeVersion: process.version,
+  platform: process.platform,
+  startupTime: new Date().toISOString()
+});
+
+console.log(`📊 New Relic tracking startup event sent`);
 
 const httpServer = createServer((req, res) => {
   let body = Buffer.alloc(0);

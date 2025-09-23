@@ -2,10 +2,10 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
+import newrelic from "newrelic";
 
 const codeRouter = new Hono();
 
-// Environment variables
 const JUDGE0_API_URL = process.env.JUDGE0_API_URL || "https://judge0-ce.p.rapidapi.com";
 const JUDGE0_API_KEY = process.env.JUDGE0_API_KEY;
 const JUDGE0_API_HOST = process.env.JUDGE0_API_HOST || "judge0-ce.p.rapidapi.com";
@@ -15,27 +15,32 @@ if (!JUDGE0_API_KEY) {
   process.exit(1);
 }
 
-// Validation schemas with proper security limits
 const executeCodeSchema = z.object({
-  language_id: z.number().int().min(1).max(200), // Reasonable language ID range
-  source_code: z.string().min(1).max(50000), // 50KB max source code
-  stdin: z.string().max(10000).optional().default(""), // 10KB max stdin
-  cpu_time_limit: z.number().min(1).max(30).optional().default(5), // 1-30 seconds
-  memory_limit: z.number().min(16384).max(512000).optional().default(128000), // 16MB-512MB
-  wall_time_limit: z.number().min(1).max(60).optional().default(10), // 1-60 seconds
+  language_id: z.number().int().min(1).max(200),
+  source_code: z.string().min(1).max(50000),
+  stdin: z.string().max(10000).optional().default(""),
+  cpu_time_limit: z.number().min(1).max(30).optional().default(5),
+  memory_limit: z.number().min(16384).max(512000).optional().default(128000),
+  wall_time_limit: z.number().min(1).max(60).optional().default(10),
 });
 
 const tokenSchema = z.object({
   token: z.string().min(1),
 });
 
-// Helper function to make Judge0 API requests
 async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
   const url = `${JUDGE0_API_URL}${endpoint}`;
+  const start = Date.now();
 
-  // Add timeout protection
+  // Track the external API call with New Relic
+  newrelic.addCustomAttributes({
+    externalService: 'Judge0',
+    endpoint,
+    method: options.method || 'GET'
+  });
+
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
     const response = await fetch(url, {
@@ -51,12 +56,13 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
 
     clearTimeout(timeoutId);
 
+    const duration = Date.now() - start;
+    console.log(`Judge0 API: ${options.method || 'GET'} ${endpoint} (${duration}ms)`);
+
     if (!response.ok) {
-      // Log full error details server-side only
       const errorBody = await response.text().catch(() => '');
       console.error(`Judge0 API Error: ${response.status} ${response.statusText} - ${errorBody}`);
 
-      // Return sanitized error messages to frontend
       let clientMessage = "Code execution failed. Please try again.";
       let statusCode = response.status;
 
@@ -64,19 +70,17 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
         clientMessage = "Code execution service is temporarily busy. Please try again in a few minutes.";
       } else if (response.status === 401 || response.status === 403) {
         clientMessage = "Code execution service is temporarily unavailable. Please contact support.";
-        statusCode = 503; // Don't expose auth issues
+        statusCode = 503;
       } else if (response.status >= 500) {
         clientMessage = "Code execution service is temporarily unavailable. Please try again later.";
         statusCode = 503;
       }
 
-      clearTimeout(timeoutId);
       throw new HTTPException(statusCode, {
         message: clientMessage,
       });
     }
 
-    clearTimeout(timeoutId);
     return response;
   } catch (error) {
     clearTimeout(timeoutId);
@@ -99,7 +103,6 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
   }
 }
 
-// POST /api/code/execute - Submit code for execution
 codeRouter.post(
   "/execute",
   zValidator("json", executeCodeSchema),
@@ -107,7 +110,6 @@ codeRouter.post(
     try {
       const body = c.req.valid("json");
 
-      // Base64 encode the source code and stdin for Judge0
       const submissionData = {
         ...body,
         source_code: Buffer.from(body.source_code).toString("base64"),
@@ -134,7 +136,6 @@ codeRouter.post(
   }
 );
 
-// GET /api/code/status/:token - Get execution status and results
 codeRouter.get(
   "/status/:token",
   zValidator("param", tokenSchema),
@@ -148,7 +149,6 @@ codeRouter.get(
 
       const result = await response.json();
 
-      // Decode base64 encoded fields if they exist
       if (result.stdout) {
         result.stdout = Buffer.from(result.stdout, "base64").toString("utf-8");
       }
@@ -176,7 +176,6 @@ codeRouter.get(
   }
 );
 
-// GET /api/code/languages - Get supported languages (optional endpoint)
 codeRouter.get("/languages", async (c) => {
   try {
     const response = await makeJudge0Request("/languages");
@@ -194,7 +193,6 @@ codeRouter.get("/languages", async (c) => {
   }
 });
 
-// GET /api/code/health - Health check for Judge0 service connectivity
 codeRouter.get("/health", async (c) => {
   try {
     const response = await makeJudge0Request("/languages");

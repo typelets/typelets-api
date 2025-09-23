@@ -12,7 +12,6 @@ import { checkNoteLimits } from "../middleware/usage";
 
 const notesRouter = new Hono();
 
-// @ts-ignore
 notesRouter.get("/", zValidator("query", notesQuerySchema), async (c) => {
   const userId = c.get("userId");
   const query = c.req.valid("query");
@@ -40,7 +39,6 @@ notesRouter.get("/", zValidator("query", notesQuerySchema), async (c) => {
   }
 
   if (query.search) {
-    // Escape special SQL LIKE characters to prevent injection
     const escapedSearch = query.search
       .replace(/\\/g, '\\\\')
       .replace(/%/g, '\\%')
@@ -102,7 +100,6 @@ notesRouter.get("/:id", async (c) => {
   return c.json(note);
 });
 
-// @ts-ignore
 notesRouter.post("/", checkNoteLimits, zValidator("json", createNoteSchema), async (c) => {
   const userId = c.get("userId");
   const data = c.req.valid("json");
@@ -118,7 +115,6 @@ notesRouter.post("/", checkNoteLimits, zValidator("json", createNoteSchema), asy
   return c.json(newNote, 201);
 });
 
-// @ts-ignore
 notesRouter.put("/:id", zValidator("json", updateNoteSchema), async (c) => {
   const userId = c.get("userId");
   const noteId = c.req.param("id");
@@ -148,13 +144,11 @@ notesRouter.delete("/empty-trash", async (c) => {
   try {
     const userId = c.get("userId");
 
-    // First, get count of notes that will be deleted for logging
     const [{ total }] = await db
       .select({ total: count() })
       .from(notes)
       .where(and(eq(notes.userId, userId), eq(notes.deleted, true)));
 
-    // Permanently delete all notes that are marked as deleted for this user
     await db
       .delete(notes)
       .where(and(eq(notes.userId, userId), eq(notes.deleted, true)));

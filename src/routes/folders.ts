@@ -12,7 +12,6 @@ import { eq, and, desc, count, asc, isNull } from "drizzle-orm";
 
 const foldersRouter = new Hono();
 
-// @ts-ignore
 foldersRouter.get("/", zValidator("query", foldersQuerySchema), async (c) => {
   const userId = c.get("userId");
   const query = c.req.valid("query");
@@ -92,7 +91,6 @@ foldersRouter.get("/:id", async (c) => {
   });
 });
 
-// @ts-ignore
 foldersRouter.post("/", zValidator("json", createFolderSchema), async (c) => {
   const userId = c.get("userId");
   const data = c.req.valid("json");
@@ -135,7 +133,6 @@ foldersRouter.post("/", zValidator("json", createFolderSchema), async (c) => {
   return c.json(newFolder, 201);
 });
 
-// @ts-ignore
 foldersRouter.put("/:id", zValidator("json", updateFolderSchema), async (c) => {
   const userId = c.get("userId");
   const folderId = c.req.param("id");
@@ -182,7 +179,6 @@ foldersRouter.put("/:id", zValidator("json", updateFolderSchema), async (c) => {
 
 foldersRouter.put(
   "/:id/reorder",
-  // @ts-ignore
   zValidator("json", reorderFolderSchema),
   async (c) => {
     const userId = c.get("userId");

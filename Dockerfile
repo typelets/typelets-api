@@ -38,6 +38,13 @@ RUN pnpm install --frozen-lockfile --prod
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
+COPY newrelic.js ./
+
+# Set New Relic environment variables
+ENV NEW_RELIC_NO_CONFIG_FILE=false
+ENV NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
+ENV NEW_RELIC_LOG=stdout
+ENV NEW_RELIC_LOG_LEVEL=info
 
 # Change ownership to non-root user
 RUN chown -R typelets:nodejs /app

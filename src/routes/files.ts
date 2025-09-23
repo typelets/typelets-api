@@ -18,17 +18,14 @@ const maxNoteSize = process.env.MAX_NOTE_SIZE_MB
 
 filesRouter.post(
   "/notes/:noteId/files",
-  // @ts-ignore
   zValidator("json", uploadFileSchema),
   async (c) => {
     const userId = c.get("userId");
     const noteId = c.req.param("noteId");
     const data = c.req.valid("json");
     
-    // Check storage limits before other validations
     await checkStorageLimits(data.size)(c, async () => {});
 
-    // Verify note exists and user owns it
     const note = await db.query.notes.findFirst({
       where: and(eq(notes.id, noteId), eq(notes.userId, userId)),
     });
@@ -37,7 +34,6 @@ filesRouter.post(
       throw new HTTPException(403, { message: "Access denied" });
     }
 
-    // Check file size limit
     const maxFileSizeBytes = maxFileSize * 1024 * 1024;
     if (data.size > maxFileSizeBytes) {
       throw new HTTPException(413, {
@@ -45,13 +41,11 @@ filesRouter.post(
       });
     }
 
-    // Check total size limit for the note
     const result = await db
       .select({ totalSize: sql<string>`COALESCE(SUM(size), 0)` })
       .from(fileAttachments)
       .where(eq(fileAttachments.noteId, noteId));
 
-    // Force conversion to number to prevent string concatenation
     const totalSize = Number(result[0]?.totalSize || 0);
     const newFileSize = Number(data.size);
     const combinedSize = totalSize + newFileSize;
@@ -63,11 +57,8 @@ filesRouter.post(
       });
     }
 
-    // Generate unique filename
     const filename = `${randomUUID()}_${Date.now()}`;
 
-    // Insert file attachment
-    // @ts-ignore
     const [newAttachment] = await db
       .insert(fileAttachments)
       .values({
@@ -98,7 +89,6 @@ filesRouter.get("/files/:fileId", async (c) => {
   const userId = c.get("userId");
   const fileId = c.req.param("fileId");
 
-  // Get file with note ownership check
   const file = await db
     .select({
       encryptedData: fileAttachments.encryptedData,
@@ -124,7 +114,6 @@ filesRouter.delete("/files/:fileId", async (c) => {
   const userId = c.get("userId");
   const fileId = c.req.param("fileId");
 
-  // Check file exists and user owns it through note ownership
   const file = await db
     .select({ id: fileAttachments.id })
     .from(fileAttachments)
@@ -136,7 +125,6 @@ filesRouter.delete("/files/:fileId", async (c) => {
     throw new HTTPException(404, { message: "File not found" });
   }
 
-  // Delete the file
   await db.delete(fileAttachments).where(eq(fileAttachments.id, fileId));
 
   return c.body(null, 204);
@@ -146,7 +134,6 @@ filesRouter.get("/notes/:noteId/files", async (c) => {
   const userId = c.get("userId");
   const noteId = c.req.param("noteId");
 
-  // Verify note exists and user owns it
   const note = await db.query.notes.findFirst({
     where: and(eq(notes.id, noteId), eq(notes.userId, userId)),
   });
@@ -155,7 +142,6 @@ filesRouter.get("/notes/:noteId/files", async (c) => {
     throw new HTTPException(403, { message: "Access denied" });
   }
 
-  // Get all attachments for this note (metadata only)
   const attachments = await db
     .select({
       id: fileAttachments.id,
