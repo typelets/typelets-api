@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/typelets/typelets-api/compare/v1.2.0...v1.3.0) (2025-09-23)
+
+
+### Features
+
+* add comprehensive Sentry monitoring and fix 429 rate limiting error ([6ba5744](https://github.com/typelets/typelets-api/commit/6ba5744022d075216e8053b6c2127cbb38a4824e))
+
 # [1.2.0](https://github.com/typelets/typelets-api/compare/v1.1.1...v1.2.0) (2025-09-20)
 
 
