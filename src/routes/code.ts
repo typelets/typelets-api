@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
-import newrelic from "newrelic";
 
 const codeRouter = new Hono();
 
@@ -32,12 +31,7 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
   const url = `${JUDGE0_API_URL}${endpoint}`;
   const start = Date.now();
 
-  // Track the external API call with New Relic
-  newrelic.addCustomAttributes({
-    externalService: 'Judge0',
-    endpoint,
-    method: options.method || 'GET'
-  });
+  // Judge0 API call timing
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -116,12 +110,16 @@ codeRouter.post(
         stdin: Buffer.from(body.stdin || "").toString("base64"),
       };
 
+      const executionStart = Date.now();
       const response = await makeJudge0Request("/submissions?base64_encoded=true", {
         method: "POST",
         body: JSON.stringify(submissionData),
       });
 
       const result = await response.json();
+      const executionDuration = Date.now() - executionStart;
+
+
       return c.json(result);
     } catch (error) {
       if (error instanceof HTTPException) {

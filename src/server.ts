@@ -1,24 +1,10 @@
 /// <reference lib="dom" />
+
+// Load environment variables
 import "dotenv-flow/config";
 
-// Initialize New Relic FIRST - before any other imports
-import newrelic from "newrelic";
-
-// Log New Relic initialization
 const isDevelopment = process.env.NODE_ENV === 'development';
-const appName = isDevelopment ? 'typelets-api-dev' :
-                process.env.NODE_ENV === 'production' ? 'typelets-api-prod' :
-                'typelets-api-staging';
 
-console.log(`📊 New Relic initialized for: ${appName}`);
-console.log(`🔍 New Relic logging level: ${isDevelopment ? 'debug' : 'info'}`);
-
-// Add some custom attributes for the entire application
-newrelic.addCustomAttributes({
-  environment: process.env.NODE_ENV || 'development',
-  application: 'typelets-api',
-  version: process.env.npm_package_version || 'unknown'
-});
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -35,7 +21,9 @@ import notesRouter from "./routes/notes";
 import usersRouter from "./routes/users";
 import filesRouter from "./routes/files";
 import codeRouter from "./routes/code";
+import metricsRouter from "./routes/metrics";
 import { VERSION } from "./version";
+import { logger } from "./lib/logger";
 
 const maxFileSize = process.env.MAX_FILE_SIZE_MB
   ? parseInt(process.env.MAX_FILE_SIZE_MB)
@@ -47,40 +35,31 @@ const app = new Hono();
 // Apply security headers first
 app.use("*", securityHeaders);
 
-// Add New Relic request logging middleware for development
-if (isDevelopment) {
-  app.use("*", async (c, next) => {
-    const start = Date.now();
-    const method = c.req.method;
-    const path = new URL(c.req.url).pathname;
+// Add request logging middleware
+app.use("*", async (c, next) => {
+  const start = Date.now();
+  const method = c.req.method;
+  const path = new URL(c.req.url).pathname;
 
+  if (isDevelopment) {
     console.log(`🌐 [${method}] ${path} - Request started`);
+  }
 
-    // Add request context to New Relic
-    newrelic.addCustomAttributes({
-      requestPath: path,
-      requestMethod: method,
-      userAgent: c.req.header('user-agent') || 'unknown'
-    });
+  await next();
 
-    await next();
+  const duration = Date.now() - start;
+  const status = c.res.status;
 
-    const duration = Date.now() - start;
-    const status = c.res.status;
+  // Log HTTP request with structured logging
+  const userId = c.get("userId");
+  logger.httpRequest(method, path, status, duration, userId);
+
+  if (isDevelopment) {
     const emoji = status >= 200 && status < 300 ? '✅' :
                   status >= 400 && status < 500 ? '⚠️' : '❌';
-
     console.log(`${emoji} [${method}] ${path} - ${status} (${duration}ms)`);
-
-    // Track slow requests in New Relic
-    if (duration > 1000) {
-      newrelic.addCustomAttributes({
-        slowRequest: true,
-        responseTime: duration
-      });
-    }
-  });
-}
+  }
+});
 
 // Apply rate limiting
 app.use(
@@ -169,13 +148,16 @@ app.get("/websocket/status", (c) => {
   if (!wsManager) {
     return c.json({ error: "WebSocket not initialized" }, 500);
   }
-  
+
   return c.json({
     websocket: "operational",
     stats: wsManager.getConnectionStats(),
     timestamp: new Date().toISOString(),
   });
 });
+
+// Add metrics routes (before auth middleware)
+app.route("/", metricsRouter);
 
 app.use("*", authMiddleware);
 
@@ -226,17 +208,7 @@ app.onError((err, c) => {
   console.error(`[ERROR ${errorId}] Method:`, c.req.method);
   console.error(`[ERROR ${errorId}] User:`, userId);
 
-  // Send to New Relic with context
-  newrelic.addCustomAttributes({
-    errorId,
-    url: c.req.url,
-    method: c.req.method,
-    userId,
-    userAgent: c.req.header('user-agent') || 'unknown',
-    ip: c.req.header('x-forwarded-for') || c.req.header('x-real-ip') || 'unknown',
-    statusCode: err instanceof HTTPException ? err.status : 500
-  });
-  newrelic.noticeError(err);
+  // Error context logged above
 
   if (err instanceof HTTPException) {
     // Log usage limit errors for billing analytics
@@ -299,6 +271,17 @@ const freeStorageGB = process.env.FREE_TIER_STORAGE_GB ? parseFloat(process.env.
 const freeNoteLimit = process.env.FREE_TIER_NOTE_LIMIT ? parseInt(process.env.FREE_TIER_NOTE_LIMIT) : 100;
 
 
+logger.info("Typelets API server starting", {
+  version: VERSION,
+  port,
+  maxFileSize,
+  maxBodySize,
+  freeStorageGB,
+  freeNoteLimit,
+  corsOrigins: corsOrigins.join(','),
+  environment: process.env.NODE_ENV || 'development'
+});
+
 console.log(
   "🚀 Typelets API v" + VERSION + " started at:",
   new Date().toISOString(),
@@ -309,22 +292,6 @@ console.log(
 );
 console.log(`💰 Free tier limits: ${freeStorageGB}GB storage, ${freeNoteLimit} notes`);
 console.log(`🌐 CORS origins:`, corsOrigins);
-
-// Send application startup event to New Relic
-newrelic.recordCustomEvent('ApplicationStartup', {
-  version: VERSION,
-  environment: process.env.NODE_ENV || 'development',
-  port: port,
-  maxFileSize: maxFileSize,
-  freeStorageGB: freeStorageGB,
-  freeNoteLimit: freeNoteLimit,
-  corsOrigins: corsOrigins.length,
-  nodeVersion: process.version,
-  platform: process.platform,
-  startupTime: new Date().toISOString()
-});
-
-console.log(`📊 New Relic tracking startup event sent`);
 
 const httpServer = createServer((req, res) => {
   let body = Buffer.alloc(0);
@@ -369,15 +336,8 @@ const httpServer = createServer((req, res) => {
 
 const wsManager = new WebSocketManager(httpServer);
 
-httpServer.listen(port, () => {
-  console.log(`🚀 Typelets API v${VERSION} with WebSocket started at:`, new Date().toISOString());
-  console.log(`📡 HTTP & WebSocket server listening on port ${port}`);
-  console.log(`📁 Max file size: ${maxFileSize}MB (body limit: ${maxBodySize}MB)`);
-  console.log(`💰 Free tier limits: ${freeStorageGB}GB storage, ${freeNoteLimit} notes`);
-  console.log(`🌐 CORS origins:`, corsOrigins);
-});
-
 // Graceful shutdown handling
+
 const shutdown = (signal: string) => {
   console.log(`\n🛑 Received ${signal}, starting graceful shutdown...`);
 
@@ -402,3 +362,12 @@ const shutdown = (signal: string) => {
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
+
+httpServer.listen(port, () => {
+  console.log(`🚀 Typelets API v${VERSION} with WebSocket started at:`, new Date().toISOString());
+  console.log(`📡 HTTP & WebSocket server listening on port ${port}`);
+  console.log(`📁 Max file size: ${maxFileSize}MB (body limit: ${maxBodySize}MB)`);
+  console.log(`💰 Free tier limits: ${freeStorageGB}GB storage, ${freeNoteLimit} notes`);
+  console.log(`🌐 CORS origins:`, corsOrigins);
+
+});

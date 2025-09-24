@@ -38,13 +38,7 @@ RUN pnpm install --frozen-lockfile --prod
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
-COPY newrelic.js ./
-
-# Set New Relic environment variables
-ENV NEW_RELIC_NO_CONFIG_FILE=false
-ENV NEW_RELIC_DISTRIBUTED_TRACING_ENABLED=true
-ENV NEW_RELIC_LOG=stdout
-ENV NEW_RELIC_LOG_LEVEL=info
+# Application configuration complete
 
 # Change ownership to non-root user
 RUN chown -R typelets:nodejs /app
@@ -53,9 +47,9 @@ USER typelets
 # Expose port
 EXPOSE 3000
 
-# Health check
+# Health check using new metrics endpoint
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
-    CMD node -e "http.get('http://localhost:3000/', (res) => process.exit(res.statusCode === 200 ? 0 : 1))" || exit 1
+    CMD node -e "http.get('http://localhost:3000/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1))" || exit 1
 
 # Start the application
 CMD ["pnpm", "start"]

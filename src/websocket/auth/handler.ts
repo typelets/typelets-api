@@ -50,7 +50,9 @@ export class AuthHandler {
   setupAuthTimeout(ws: AuthenticatedWebSocket): void {
     ws.authTimeout = setTimeout(() => {
       if (!ws.isAuthenticated) {
-        console.log("WebSocket connection closed due to authentication timeout");
+        if (process.env.NODE_ENV === 'development') {
+          console.log("WebSocket connection closed due to authentication timeout");
+        }
         ws.send(JSON.stringify({
           type: "error",
           message: "Authentication timeout. Connection will be closed."
@@ -114,7 +116,9 @@ export class AuthHandler {
         sessionSecret: sessionSecret
       }));
 
-      console.log(`User ${ws.userId} authenticated via WebSocket`);
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`User ${ws.userId} authenticated via WebSocket`);
+      }
     } catch (error: unknown) {
       console.error("WebSocket authentication failed:", error);
 

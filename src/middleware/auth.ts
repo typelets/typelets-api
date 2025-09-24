@@ -10,7 +10,6 @@ import type {
   ClerkApiUser,
   DatabaseError,
 } from "../types";
-import newrelic from "newrelic";
 
 if (!process.env.CLERK_SECRET_KEY) {
   throw new Error(
@@ -172,14 +171,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
   c.set("user", existingUser);
   c.set("clerkUser", userData);
 
-  // Set user context for New Relic
-  newrelic.setUserID(userData.id);
-  newrelic.addCustomAttributes({
-    userId: userData.id,
-    userEmail: existingUser.email,
-    firstName: existingUser.firstName,
-    lastName: existingUser.lastName
-  });
+  // User context available in Hono context
 
   await next();
 };

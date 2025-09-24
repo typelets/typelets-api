@@ -6,7 +6,6 @@ import { ConnectionManager } from './middleware/connection-manager';
 import { AuthHandler } from './auth/handler';
 import { NoteHandler } from './handlers/notes';
 import { FolderHandler } from './handlers/folders';
-import newrelic from 'newrelic';
 
 export class WebSocketManager {
   private wss: WebSocketServer;
@@ -44,14 +43,11 @@ export class WebSocketManager {
   private setupWebSocketServer(): void {
     this.wss.on("connection", (ws: AuthenticatedWebSocket) => {
       const connectionStart = Date.now();
-      console.log("New WebSocket connection established");
+      if (process.env.NODE_ENV === 'development') {
+        console.log("New WebSocket connection established");
+      }
 
-      // Track WebSocket connection metrics
-      newrelic.addCustomAttributes({
-        event: 'websocket_connection_established',
-        totalConnections: this.wss.clients.size,
-        timestamp: connectionStart
-      });
+      // Record WebSocket connection metrics
 
       // Add connection start time for duration tracking
       (ws as WebSocket & { connectionStart: number }).connectionStart = connectionStart;
@@ -86,7 +82,7 @@ export class WebSocketManager {
 
           // Track WebSocket message processing performance
           const messageStart = Date.now();
-          const _messageType = (rawMessage as { type?: string })?.type || 'unknown';
+          const messageType = (rawMessage as { type?: string })?.type || 'unknown';
 
           // Process message with optional authentication verification
           const message = await this.authHandler.processIncomingMessage(ws, rawMessage);
@@ -103,39 +99,18 @@ export class WebSocketManager {
 
           const messageDuration = Date.now() - messageStart;
 
+          // Record WebSocket message metrics
+
           // Log WebSocket performance
           const emoji = messageDuration > 2000 ? '🐌' : messageDuration > 1000 ? '⚠️' : '⚡';
-          console.log(`${emoji} WS: ${message.type} (${messageDuration}ms)`);
-
-          // Track in New Relic
-          newrelic.addCustomAttributes({
-            event: 'websocket_message_processed',
-            messageType: message.type,
-            duration: messageDuration,
-            messageSize: data.length,
-            userId: ws.userId || 'unauthenticated',
-            connectionCount: this.wss.clients.size
-          });
-
-          // Alert on slow WebSocket processing
-          if (messageDuration > 2000) {
-            newrelic.addCustomAttributes({
-              slowWebSocketProcessing: true,
-              messageType: message.type,
-              duration: messageDuration
-            });
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`${emoji} WS: ${message.type} (${messageDuration}ms)`);
           }
         } catch (error) {
           console.error("Error handling WebSocket message:", error);
 
-          // Send error to New Relic with WebSocket context
-          newrelic.addCustomAttributes({
-            context: 'websocket_message',
-            userId: ws.userId || 'unauthenticated',
-            messageType: rawMessage?.type || 'unknown',
-            messageSize: data.length
-          });
-          newrelic.noticeError(error as Error);
+          // WebSocket metrics WebSocket message errors
+          // Error tracking available via console logs
 
           ws.send(JSON.stringify({
             type: "error",
@@ -148,15 +123,11 @@ export class WebSocketManager {
         // Track connection duration
         const connectionDuration = Date.now() - ((ws as WebSocket & { connectionStart?: number }).connectionStart || Date.now());
 
-        console.log(`🔌 WebSocket disconnected (${Math.round(connectionDuration / 1000)}s session)`);
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`🔌 WebSocket disconnected (${Math.round(connectionDuration / 1000)}s session)`);
+        }
 
-        // Track connection metrics
-        newrelic.addCustomAttributes({
-          event: 'websocket_connection_closed',
-          userId: ws.userId || 'unauthenticated',
-          sessionDuration: connectionDuration,
-          totalConnections: this.wss.clients.size - 1
-        });
+        // Record WebSocket disconnection metrics
 
         this.handleDisconnection(ws);
       });
@@ -165,12 +136,8 @@ export class WebSocketManager {
         console.error("WebSocket error:", error);
 
         // Send WebSocket connection errors to New Relic
-        newrelic.addCustomAttributes({
-          context: 'websocket_connection',
-          userId: ws.userId || 'unauthenticated',
-          readyState: ws.readyState
-        });
-        newrelic.noticeError(error);
+        // WebSocket metrics WebSocket connection errors
+        // Error tracking available via console logs
       });
 
       ws.send(JSON.stringify({
