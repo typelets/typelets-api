@@ -35,8 +35,14 @@ export const reorderFolderSchema = z.object({
 });
 
 export const createNoteSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  content: z.string().optional(),
+  title: z.string().refine(
+    (value) => value === "[ENCRYPTED]",
+    "Title must be '[ENCRYPTED]'"
+  ).optional(),
+  content: z.string().refine(
+    (value) => value === "[ENCRYPTED]",
+    "Content must be '[ENCRYPTED]'"
+  ).optional(),
   folderId: z.string().uuid().nullable().optional(),
   starred: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
@@ -48,8 +54,14 @@ export const createNoteSchema = z.object({
 });
 
 export const updateNoteSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  content: z.string().optional(),
+  title: z.string().refine(
+    (value) => value === "[ENCRYPTED]",
+    "Title must be '[ENCRYPTED]'"
+  ).optional(),
+  content: z.string().refine(
+    (value) => value === "[ENCRYPTED]",
+    "Content must be '[ENCRYPTED]'"
+  ).optional(),
   folderId: z.string().uuid().nullable().optional(),
   starred: z.boolean().optional(),
   archived: z.boolean().optional(),

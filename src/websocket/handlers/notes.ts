@@ -97,7 +97,15 @@ export class NoteHandler extends BaseResourceHandler {
 
         Object.keys(message.changes).forEach(key => {
           if (allowedFields.includes(key)) {
-            filteredChanges[key] = (message.changes as Record<string, unknown>)[key];
+            const value = (message.changes as Record<string, unknown>)[key];
+
+            // Validate title and content fields must be [ENCRYPTED]
+            if ((key === 'title' || key === 'content') && typeof value === 'string' && value !== '[ENCRYPTED]') {
+              console.warn(`Note update: rejected plaintext ${key} for note ${message.noteId} - must be [ENCRYPTED]`);
+              return;
+            }
+
+            filteredChanges[key] = value;
           } else {
             console.warn(`Note update: filtered out disallowed field '${key}' for note ${message.noteId}`);
           }
