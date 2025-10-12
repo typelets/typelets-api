@@ -12,7 +12,7 @@ usersRouter.get("/me", async (c) => {
   }
   
   const FREE_TIER_STORAGE_GB = process.env.FREE_TIER_STORAGE_GB ? parseFloat(process.env.FREE_TIER_STORAGE_GB) : 1;
-  const FREE_TIER_NOTE_LIMIT = process.env.FREE_TIER_NOTE_LIMIT ? parseInt(process.env.FREE_TIER_NOTE_LIMIT) : 100;
+  const FREE_TIER_NOTE_LIMIT = process.env.FREE_TIER_NOTE_LIMIT ? parseInt(process.env.FREE_TIER_NOTE_LIMIT) : 1000;
   
   const { db, fileAttachments, notes } = await import("../db");
   const { eq, and, sum, count, isNull, or } = await import("drizzle-orm");

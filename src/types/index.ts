@@ -46,6 +46,12 @@ export interface UserUpdateData {
   lastName?: string | null;
 }
 
+// Note with attachment count for list responses
+export type NoteWithAttachmentCount = Omit<Note, 'attachments'> & {
+  attachmentCount: number;
+  folder?: Folder | null;
+};
+
 export type {
   User,
   UserInsert,

@@ -68,11 +68,19 @@ notesRouter.get("/", zValidator("query", notesQuerySchema), async (c) => {
     offset,
     with: {
       folder: true,
+      attachments: true,
     },
   });
 
+  // Add attachmentCount to each note and remove full attachments array
+  const notesWithAttachmentCount = userNotes.map(note => ({
+    ...note,
+    attachmentCount: note.attachments.length,
+    attachments: undefined,
+  }));
+
   return c.json({
-    notes: userNotes,
+    notes: notesWithAttachmentCount,
     pagination: {
       page: query.page,
       limit: query.limit,

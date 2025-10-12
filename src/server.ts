@@ -1,6 +1,5 @@
-/// <reference lib="dom" />
+require('newrelic');
 
-// Load environment variables
 import "dotenv-flow/config";
 
 const isDevelopment = process.env.NODE_ENV === 'development';
@@ -268,7 +267,7 @@ app.notFound((c) => {
 const port = Number(process.env.PORT) || 3000;
 
 const freeStorageGB = process.env.FREE_TIER_STORAGE_GB ? parseFloat(process.env.FREE_TIER_STORAGE_GB) : 1;
-const freeNoteLimit = process.env.FREE_TIER_NOTE_LIMIT ? parseInt(process.env.FREE_TIER_NOTE_LIMIT) : 100;
+const freeNoteLimit = process.env.FREE_TIER_NOTE_LIMIT ? parseInt(process.env.FREE_TIER_NOTE_LIMIT) : 1000;
 
 
 logger.info("Typelets API server starting", {
