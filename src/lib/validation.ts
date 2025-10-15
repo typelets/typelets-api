@@ -27,22 +27,18 @@ export const updateFolderSchema = z.object({
 });
 
 export const reorderFolderSchema = z.object({
-  newIndex: z
-    .number()
-    .int()
-    .min(0)
-    .describe("New position index for the folder"),
+  newIndex: z.number().int().min(0).describe("New position index for the folder"),
 });
 
 export const createNoteSchema = z.object({
-  title: z.string().refine(
-    (value) => value === "[ENCRYPTED]",
-    "Title must be '[ENCRYPTED]'"
-  ).optional(),
-  content: z.string().refine(
-    (value) => value === "[ENCRYPTED]",
-    "Content must be '[ENCRYPTED]'"
-  ).optional(),
+  title: z
+    .string()
+    .refine((value) => value === "[ENCRYPTED]", "Title must be '[ENCRYPTED]'")
+    .optional(),
+  content: z
+    .string()
+    .refine((value) => value === "[ENCRYPTED]", "Content must be '[ENCRYPTED]'")
+    .optional(),
   folderId: z.string().uuid().nullable().optional(),
   starred: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
@@ -54,14 +50,14 @@ export const createNoteSchema = z.object({
 });
 
 export const updateNoteSchema = z.object({
-  title: z.string().refine(
-    (value) => value === "[ENCRYPTED]",
-    "Title must be '[ENCRYPTED]'"
-  ).optional(),
-  content: z.string().refine(
-    (value) => value === "[ENCRYPTED]",
-    "Content must be '[ENCRYPTED]'"
-  ).optional(),
+  title: z
+    .string()
+    .refine((value) => value === "[ENCRYPTED]", "Title must be '[ENCRYPTED]'")
+    .optional(),
+  content: z
+    .string()
+    .refine((value) => value === "[ENCRYPTED]", "Content must be '[ENCRYPTED]'")
+    .optional(),
   folderId: z.string().uuid().nullable().optional(),
   starred: z.boolean().optional(),
   archived: z.boolean().optional(),
@@ -103,15 +99,15 @@ export const foldersQuerySchema = z
 
 // Allowed MIME types for security
 const allowedMimeTypes = [
-  'image/jpeg',
-  'image/png',
-  'image/gif',
-  'image/webp',
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-  'application/json',
-  'text/csv',
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+  "text/plain",
+  "text/markdown",
+  "application/json",
+  "text/csv",
 ] as const;
 
 export const uploadFileSchema = z.object({
@@ -119,28 +115,23 @@ export const uploadFileSchema = z.object({
     .string()
     .min(1)
     .max(255)
-    .refine(
-      (name) => {
-        // Check for dangerous characters and patterns
-        const dangerousChars = /[<>:"/\\|?*]/;
-        // Check for control characters (ASCII 0-31)
-        const hasControlChars = name.split('').some(char => {
-          const code = char.charCodeAt(0);
-          return code >= 0 && code <= 31;
-        });
-        const dangerousPatterns = /^\./; // Files starting with dot
+    .refine((name) => {
+      // Check for dangerous characters and patterns
+      const dangerousChars = /[<>:"/\\|?*]/;
+      // Check for control characters (ASCII 0-31)
+      const hasControlChars = name.split("").some((char) => {
+        const code = char.charCodeAt(0);
+        return code >= 0 && code <= 31;
+      });
+      const dangerousPatterns = /^\./; // Files starting with dot
 
-        return !dangerousChars.test(name) &&
-               !hasControlChars &&
-               !dangerousPatterns.test(name);
-      },
-      "Invalid filename characters"
-    ),
+      return !dangerousChars.test(name) && !hasControlChars && !dangerousPatterns.test(name);
+    }, "Invalid filename characters"),
   mimeType: z
     .string()
     .refine(
-      (type): type is typeof allowedMimeTypes[number] =>
-        allowedMimeTypes.includes(type as typeof allowedMimeTypes[number]),
+      (type): type is (typeof allowedMimeTypes)[number] =>
+        allowedMimeTypes.includes(type as (typeof allowedMimeTypes)[number]),
       "File type not allowed"
     ),
   size: z

@@ -36,7 +36,10 @@ class InMemoryRateLimitStore {
 const store = new InMemoryRateLimitStore();
 
 // Cleanup expired entries every 5 minutes
-let cleanupInterval: ReturnType<typeof setInterval> | null = setInterval(() => store.cleanup(), 5 * 60 * 1000);
+let cleanupInterval: ReturnType<typeof setInterval> | null = setInterval(
+  () => store.cleanup(),
+  5 * 60 * 1000
+);
 
 // Graceful cleanup function
 export const cleanup = (): void => {
@@ -61,10 +64,11 @@ export const rateLimit = (options: RateLimitOptions) => {
     keyGenerator = (c: Context) => {
       // Use combination of IP and user ID for authenticated requests
       const userId = c.get("userId");
-      const ip = c.env?.CF_CONNECTING_IP ||
-               c.req.header("x-forwarded-for")?.split(",")[0] ||
-               c.req.header("x-real-ip") ||
-               "unknown";
+      const ip =
+        c.env?.CF_CONNECTING_IP ||
+        c.req.header("x-forwarded-for")?.split(",")[0] ||
+        c.req.header("x-real-ip") ||
+        "unknown";
       return userId ? `${userId}:${ip}` : ip;
     },
     skipSuccessfulRequests = false,
@@ -93,7 +97,7 @@ export const rateLimit = (options: RateLimitOptions) => {
           limit: max,
           remaining: 0,
           reset: entry.resetTime,
-        }
+        },
       });
     }
 
@@ -106,8 +110,7 @@ export const rateLimit = (options: RateLimitOptions) => {
 
     // Optionally skip counting successful/failed requests
     const shouldSkip =
-      (skipSuccessfulRequests && c.res.status < 400) ||
-      (skipFailedRequests && c.res.status >= 400);
+      (skipSuccessfulRequests && c.res.status < 400) || (skipFailedRequests && c.res.status >= 400);
 
     if (shouldSkip) {
       entry.count--;

@@ -1,79 +1,68 @@
 ## [1.3.1](https://github.com/typelets/typelets-api/compare/v1.3.0...v1.3.1) (2025-09-25)
 
-
 ### Bug Fixes
 
-* enforce encrypted data validation to prevent plaintext exposure ([0cc6f77](https://github.com/typelets/typelets-api/commit/0cc6f77fcbf9def845e1fae0b871c27f7b1fad95))
+- enforce encrypted data validation to prevent plaintext exposure ([0cc6f77](https://github.com/typelets/typelets-api/commit/0cc6f77fcbf9def845e1fae0b871c27f7b1fad95))
 
 # [1.3.0](https://github.com/typelets/typelets-api/compare/v1.2.0...v1.3.0) (2025-09-23)
 
-
 ### Features
 
-* add comprehensive Sentry monitoring and fix 429 rate limiting error ([6ba5744](https://github.com/typelets/typelets-api/commit/6ba5744022d075216e8053b6c2127cbb38a4824e))
+- add comprehensive Sentry monitoring and fix 429 rate limiting error ([6ba5744](https://github.com/typelets/typelets-api/commit/6ba5744022d075216e8053b6c2127cbb38a4824e))
 
 # [1.2.0](https://github.com/typelets/typelets-api/compare/v1.1.1...v1.2.0) (2025-09-20)
 
-
 ### Features
 
-* **ci:** add Husky pre-commit hooks to prevent CI failures ([346bc2b](https://github.com/typelets/typelets-api/commit/346bc2bcd087d5000b7cc21032561c60baf43dda))
-* **ci:** add Husky pre-commit hooks to prevent CI failures ([e2b1017](https://github.com/typelets/typelets-api/commit/e2b1017d1bbb133dd1067ef9234fb463ad89f15d))
-* **code:** add secure API proxy for code execution ([8d599b5](https://github.com/typelets/typelets-api/commit/8d599b5c6c72e3ae871a9cf71b9304fb8541828e))
+- **ci:** add Husky pre-commit hooks to prevent CI failures ([346bc2b](https://github.com/typelets/typelets-api/commit/346bc2bcd087d5000b7cc21032561c60baf43dda))
+- **ci:** add Husky pre-commit hooks to prevent CI failures ([e2b1017](https://github.com/typelets/typelets-api/commit/e2b1017d1bbb133dd1067ef9234fb463ad89f15d))
+- **code:** add secure API proxy for code execution ([8d599b5](https://github.com/typelets/typelets-api/commit/8d599b5c6c72e3ae871a9cf71b9304fb8541828e))
 
 ## [1.1.1](https://github.com/typelets/typelets-api/compare/v1.1.0...v1.1.1) (2025-09-16)
 
-
 ### Bug Fixes
 
-* make note title field optional for encrypted notes ([ec19a48](https://github.com/typelets/typelets-api/commit/ec19a48954a10eb2a2531c3195fc5fe6b3430d70))
+- make note title field optional for encrypted notes ([ec19a48](https://github.com/typelets/typelets-api/commit/ec19a48954a10eb2a2531c3195fc5fe6b3430d70))
 
 # [1.1.0](https://github.com/typelets/typelets-api/compare/v1.0.4...v1.1.0) (2025-09-15)
 
-
 ### Features
 
-* **websocket:** implement real-time sync with HMAC authentication and fix folder moves ([8de85b7](https://github.com/typelets/typelets-api/commit/8de85b7eae38b9af76154e40cdeff53d771f6e92))
+- **websocket:** implement real-time sync with HMAC authentication and fix folder moves ([8de85b7](https://github.com/typelets/typelets-api/commit/8de85b7eae38b9af76154e40cdeff53d771f6e92))
 
 ## [1.0.4](https://github.com/typelets/typelets-api/compare/v1.0.3...v1.0.4) (2025-09-10)
 
-
 ### Bug Fixes
 
-* bundle API with esbuild to resolve directory import errors ([4644c0e](https://github.com/typelets/typelets-api/commit/4644c0e3d2de2eb5796abab36b931615dc81eead))
+- bundle API with esbuild to resolve directory import errors ([4644c0e](https://github.com/typelets/typelets-api/commit/4644c0e3d2de2eb5796abab36b931615dc81eead))
 
 ## [1.0.3](https://github.com/typelets/typelets-api/compare/v1.0.2...v1.0.3) (2025-09-10)
 
-
 ### Bug Fixes
 
-* include root-level TypeScript files in esbuild output ([cf9bb4f](https://github.com/typelets/typelets-api/commit/cf9bb4fda0fa19925122b816d0375c88c4f39e05))
+- include root-level TypeScript files in esbuild output ([cf9bb4f](https://github.com/typelets/typelets-api/commit/cf9bb4fda0fa19925122b816d0375c88c4f39e05))
 
 ## [1.0.2](https://github.com/typelets/typelets-api/compare/v1.0.1...v1.0.2) (2025-09-10)
 
-
 ### Bug Fixes
 
-* replace tsc with esbuild to resolve build hanging issue ([235fce7](https://github.com/typelets/typelets-api/commit/235fce77cdde4e2287fe8b25acc7bcb96deb6ff8))
+- replace tsc with esbuild to resolve build hanging issue ([235fce7](https://github.com/typelets/typelets-api/commit/235fce77cdde4e2287fe8b25acc7bcb96deb6ff8))
 
 ## [1.0.1](https://github.com/typelets/typelets-api/compare/v1.0.0...v1.0.1) (2025-09-10)
 
-
 ### Bug Fixes
 
-* update Dockerfile to use pnpm instead of npm ([13e9639](https://github.com/typelets/typelets-api/commit/13e963965c7e5fa0e060ba8a0d8995eee761620b))
+- update Dockerfile to use pnpm instead of npm ([13e9639](https://github.com/typelets/typelets-api/commit/13e963965c7e5fa0e060ba8a0d8995eee761620b))
 
 # 1.0.0 (2025-09-09)
 
-
 ### Bug Fixes
 
-* remove ES module configuration to fix semantic-release scripts ([f869d14](https://github.com/typelets/typelets-api/commit/f869d14cf42b35d119d11e3e25daff98060b7129))
-
+- remove ES module configuration to fix semantic-release scripts ([f869d14](https://github.com/typelets/typelets-api/commit/f869d14cf42b35d119d11e3e25daff98060b7129))
 
 ### Features
 
-* initial open source release of Typelets API ([66a3d30](https://github.com/typelets/typelets-api/commit/66a3d30dcbc0a33c4118c6948d9537e885298039))
+- initial open source release of Typelets API ([66a3d30](https://github.com/typelets/typelets-api/commit/66a3d30dcbc0a33c4118c6948d9537e885298039))
 
 # Changelog
 

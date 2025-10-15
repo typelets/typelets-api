@@ -1,4 +1,4 @@
-import { WebSocket } from 'ws';
+import { WebSocket } from "ws";
 
 export interface RateLimitInfo {
   count: number;
@@ -28,12 +28,12 @@ export interface WebSocketMessage {
 }
 
 export interface ResourceOperationConfig {
-  resourceType: 'folder' | 'note';
-  operation: 'created' | 'updated' | 'deleted';
+  resourceType: "folder" | "note";
+  operation: "created" | "updated" | "deleted";
   idField: string;
   dataField?: string;
   requiresAuth?: boolean;
-  tableName?: 'folders' | 'notes';
+  tableName?: "folders" | "notes";
   syncMessageType: string;
   logAction: string;
 }

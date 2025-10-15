@@ -47,7 +47,7 @@ export interface UserUpdateData {
 }
 
 // Note with attachment count for list responses
-export type NoteWithAttachmentCount = Omit<Note, 'attachments'> & {
+export type NoteWithAttachmentCount = Omit<Note, "attachments"> & {
   attachmentCount: number;
   folder?: Folder | null;
 };
