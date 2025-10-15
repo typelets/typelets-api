@@ -38,12 +38,8 @@ class Logger {
     return level.priority <= this.currentLogLevel.priority;
   }
 
-  private formatLog(
-    level: string,
-    message: string,
-    meta: LogMetadata = {}
-  ): Record<string, unknown> {
-    return {
+  private formatLog(level: string, message: string, meta: LogMetadata = {}): string {
+    const logEntry = {
       timestamp: new Date().toISOString(),
       level,
       service: this.service,
@@ -52,6 +48,8 @@ class Logger {
       message,
       ...meta,
     };
+
+    return JSON.stringify(logEntry);
   }
 
   error(message: string, meta: LogMetadata = {}, error?: Error): void {

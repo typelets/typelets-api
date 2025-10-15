@@ -1,9 +1,8 @@
 ## [1.7.1](https://github.com/typelets/typelets-api/compare/v1.7.0...v1.7.1) (2025-10-15)
 
-
 ### Bug Fixes
 
-* output structured logs for New Relic log forwarding ([9d004a4](https://github.com/typelets/typelets-api/commit/9d004a406b0de701a09fac9b3e9fdff767e75133))
+- output structured logs for New Relic log forwarding ([9d004a4](https://github.com/typelets/typelets-api/commit/9d004a406b0de701a09fac9b3e9fdff767e75133))
 
 # [1.7.0](https://github.com/typelets/typelets-api/compare/v1.6.2...v1.7.0) (2025-10-15)
 
