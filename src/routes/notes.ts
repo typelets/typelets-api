@@ -5,6 +5,8 @@ import { db, notes } from "../db";
 import { createNoteSchema, updateNoteSchema, notesQuerySchema } from "../lib/validation";
 import { eq, and, desc, or, ilike, count, SQL } from "drizzle-orm";
 import { checkNoteLimits } from "../middleware/usage";
+import { getCache, setCache } from "../lib/cache";
+import { CacheKeys, CacheTTL } from "../lib/cache-keys";
 
 const notesRouter = new Hono();
 
@@ -77,6 +79,63 @@ notesRouter.get("/", zValidator("query", notesQuerySchema), async (c) => {
       pages: Math.ceil(total / query.limit),
     },
   });
+});
+
+notesRouter.get("/counts", async (c) => {
+  const userId = c.get("userId");
+  const cacheKey = CacheKeys.notesCounts(userId);
+
+  // Try to get from cache first
+  const cachedCounts = await getCache<{
+    all: number;
+    starred: number;
+    archived: number;
+    trash: number;
+  }>(cacheKey);
+
+  if (cachedCounts) {
+    return c.json(cachedCounts);
+  }
+
+  // If not in cache, query the database
+  const [allCount] = await db
+    .select({ total: count() })
+    .from(notes)
+    .where(and(eq(notes.userId, userId), eq(notes.deleted, false), eq(notes.archived, false)));
+
+  const [starredCount] = await db
+    .select({ total: count() })
+    .from(notes)
+    .where(
+      and(
+        eq(notes.userId, userId),
+        eq(notes.starred, true),
+        eq(notes.deleted, false),
+        eq(notes.archived, false)
+      )
+    );
+
+  const [archivedCount] = await db
+    .select({ total: count() })
+    .from(notes)
+    .where(and(eq(notes.userId, userId), eq(notes.archived, true), eq(notes.deleted, false)));
+
+  const [trashCount] = await db
+    .select({ total: count() })
+    .from(notes)
+    .where(and(eq(notes.userId, userId), eq(notes.deleted, true)));
+
+  const counts = {
+    all: allCount.total,
+    starred: starredCount.total,
+    archived: archivedCount.total,
+    trash: trashCount.total,
+  };
+
+  // Cache the results
+  await setCache(cacheKey, counts, CacheTTL.notesCounts);
+
+  return c.json(counts);
 });
 
 notesRouter.get("/:id", async (c) => {

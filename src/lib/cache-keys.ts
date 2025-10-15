@@ -15,6 +15,7 @@ export const CacheKeys = {
   notesArchived: (userId: string) => `notes:${userId}:archived`,
   notesDeleted: (userId: string) => `notes:${userId}:deleted`,
   notesDeletedCount: (userId: string) => `notes:${userId}:deletedCount`,
+  notesCounts: (userId: string) => `notes:${userId}:counts`,
 
   // Attachment-related
   noteAttachments: (noteId: string) => `attachments:note:${noteId}`,
@@ -31,5 +32,6 @@ export const CacheTTL = {
   notesStarred: 300, // 5 minutes
   notesArchived: 300, // 5 minutes
   notesDeleted: 300, // 5 minutes
+  notesCounts: 120, // 2 minutes
   noteAttachments: 1800, // 30 minutes
 } as const;
