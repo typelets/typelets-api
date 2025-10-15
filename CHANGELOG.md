@@ -1,3 +1,10 @@
+## [1.7.2](https://github.com/typelets/typelets-api/compare/v1.7.1...v1.7.2) (2025-10-15)
+
+
+### Bug Fixes
+
+* restore JSON string format for CloudWatch compatibility ([dc2b7aa](https://github.com/typelets/typelets-api/commit/dc2b7aa8474ade322fcc383db7b103f1796ef6c4))
+
 ## [1.7.1](https://github.com/typelets/typelets-api/compare/v1.7.0...v1.7.1) (2025-10-15)
 
 ### Bug Fixes
