@@ -1,3 +1,11 @@
+## [1.6.2](https://github.com/typelets/typelets-api/compare/v1.6.1...v1.6.2) (2025-10-15)
+
+
+### Bug Fixes
+
+* replace GITHUB_TOKEN with PAT_TOKEN in release workflow ([6327365](https://github.com/typelets/typelets-api/commit/632736522b75a68d0e268d0a649d5ec6b5367db3))
+* replace GITHUB_TOKEN with PAT_TOKEN in release workflow ([844f9d9](https://github.com/typelets/typelets-api/commit/844f9d997391bda0ffe4b7788efa019cddf5d982))
+
 ## [1.6.1](https://github.com/typelets/typelets-api/compare/v1.6.0...v1.6.1) (2025-10-15)
 
 ### Bug Fixes
