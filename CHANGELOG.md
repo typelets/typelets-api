@@ -1,9 +1,8 @@
 # [1.7.0](https://github.com/typelets/typelets-api/compare/v1.6.2...v1.7.0) (2025-10-15)
 
-
 ### Features
 
-* add optimized notes counts endpoint for mobile app ([225691d](https://github.com/typelets/typelets-api/commit/225691d305a99251f3eeeafbd794a1e392ee2210))
+- add optimized notes counts endpoint for mobile app ([225691d](https://github.com/typelets/typelets-api/commit/225691d305a99251f3eeeafbd794a1e392ee2210))
 
 ## [1.6.2](https://github.com/typelets/typelets-api/compare/v1.6.1...v1.6.2) (2025-10-15)
 
