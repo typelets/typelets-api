@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/typelets/typelets-api/compare/v1.5.0...v1.6.0) (2025-10-15)
+
+
+### Features
+
+* add Valkey caching layer with New Relic monitoring and structured logging ([14ada06](https://github.com/typelets/typelets-api/commit/14ada06917931812f8736515a5bbc9c40cde77cc))
+
 # [1.5.0](https://github.com/typelets/typelets-api/compare/v1.4.0...v1.5.0) (2025-10-13)
 
 
