@@ -1,3 +1,17 @@
+# [1.5.0](https://github.com/typelets/typelets-api/compare/v1.4.0...v1.5.0) (2025-10-13)
+
+
+### Features
+
+* add configurable database connection pooling ([18507b1](https://github.com/typelets/typelets-api/commit/18507b1632ee5ebf9e04acbc4a37a2453b97a5c2))
+
+# [1.4.0](https://github.com/typelets/typelets-api/compare/v1.3.1...v1.4.0) (2025-10-12)
+
+
+### Features
+
+* add attachment count to notes list and enhance monitoring ([136ad40](https://github.com/typelets/typelets-api/commit/136ad401e0552644ffac1c0e378805e3bbfb5833))
+
 ## [1.3.1](https://github.com/typelets/typelets-api/compare/v1.3.0...v1.3.1) (2025-09-25)
 
 ### Bug Fixes
