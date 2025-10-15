@@ -1,10 +1,9 @@
 ## [1.6.1](https://github.com/typelets/typelets-api/compare/v1.6.0...v1.6.1) (2025-10-15)
 
-
 ### Bug Fixes
 
-* replace single quotes with double ([906abaa](https://github.com/typelets/typelets-api/commit/906abaa269787052493886235f8a21c06e561a36))
-* replace single quotes with double ([cb49dd4](https://github.com/typelets/typelets-api/commit/cb49dd4f32a658792de0552b4ac12309fa61b334))
+- replace single quotes with double ([906abaa](https://github.com/typelets/typelets-api/commit/906abaa269787052493886235f8a21c06e561a36))
+- replace single quotes with double ([cb49dd4](https://github.com/typelets/typelets-api/commit/cb49dd4f32a658792de0552b4ac12309fa61b334))
 
 # [1.6.0](https://github.com/typelets/typelets-api/compare/v1.5.0...v1.6.0) (2025-10-15)
 
