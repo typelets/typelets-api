@@ -9,12 +9,24 @@ import {
   reorderFolderSchema,
 } from "../lib/validation";
 import { eq, and, desc, count, asc, isNull } from "drizzle-orm";
+import { getCache, setCache, deleteCache } from "../lib/cache";
+import { CacheKeys, CacheTTL } from "../lib/cache-keys";
+import { logger } from "../lib/logger";
 
 const foldersRouter = new Hono();
 
 foldersRouter.get("/", zValidator("query", foldersQuerySchema), async (c) => {
   const userId = c.get("userId");
   const query = c.req.valid("query");
+
+  // Try cache first (only for page 1, no filters)
+  if (query.page === 1 && !query.parentId) {
+    const cacheKey = CacheKeys.foldersList(userId);
+    const cached = await getCache(cacheKey);
+    if (cached) {
+      return c.json(cached);
+    }
+  }
 
   const conditions = [eq(folders.userId, userId)];
 
@@ -24,10 +36,7 @@ foldersRouter.get("/", zValidator("query", foldersQuerySchema), async (c) => {
 
   const whereClause = and(...conditions);
 
-  const [{ total }] = await db
-    .select({ total: count() })
-    .from(folders)
-    .where(whereClause);
+  const [{ total }] = await db.select({ total: count() }).from(folders).where(whereClause);
 
   const offset = (query.page - 1) * query.limit;
   const userFolders = await db.query.folders.findMany({
@@ -53,7 +62,7 @@ foldersRouter.get("/", zValidator("query", foldersQuerySchema), async (c) => {
     notes: undefined, // Remove notes from response to keep it clean
   }));
 
-  return c.json({
+  const result = {
     folders: foldersWithCounts,
     pagination: {
       page: query.page,
@@ -61,7 +70,15 @@ foldersRouter.get("/", zValidator("query", foldersQuerySchema), async (c) => {
       total,
       pages: Math.ceil(total / query.limit),
     },
-  });
+  };
+
+  // Cache result (only for page 1, no filters)
+  if (query.page === 1 && !query.parentId) {
+    const cacheKey = CacheKeys.foldersList(userId);
+    await setCache(cacheKey, result, CacheTTL.foldersList);
+  }
+
+  return c.json(result);
 });
 
 foldersRouter.get("/:id", async (c) => {
@@ -110,16 +127,13 @@ foldersRouter.post("/", zValidator("json", createFolderSchema), async (c) => {
   const existingFolders = await db.query.folders.findMany({
     where: and(
       eq(folders.userId, userId),
-      data.parentId
-        ? eq(folders.parentId, data.parentId)
-        : isNull(folders.parentId),
+      data.parentId ? eq(folders.parentId, data.parentId) : isNull(folders.parentId)
     ),
     orderBy: [desc(folders.sortOrder)],
     limit: 1,
   });
 
-  const nextSortOrder =
-    existingFolders.length > 0 ? (existingFolders[0].sortOrder || 0) + 1 : 0;
+  const nextSortOrder = existingFolders.length > 0 ? (existingFolders[0].sortOrder || 0) + 1 : 0;
 
   const [newFolder] = await db
     .insert(folders)
@@ -129,6 +143,9 @@ foldersRouter.post("/", zValidator("json", createFolderSchema), async (c) => {
       sortOrder: nextSortOrder,
     })
     .returning();
+
+  // Invalidate cache
+  await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));
 
   return c.json(newFolder, 201);
 });
@@ -174,87 +191,85 @@ foldersRouter.put("/:id", zValidator("json", updateFolderSchema), async (c) => {
     .where(eq(folders.id, folderId))
     .returning();
 
+  // Invalidate cache
+  await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));
+
   return c.json(updatedFolder);
 });
 
-foldersRouter.put(
-  "/:id/reorder",
-  zValidator("json", reorderFolderSchema),
-  async (c) => {
-    const userId = c.get("userId");
-    const folderId = c.req.param("id");
-    const { newIndex } = c.req.valid("json");
+foldersRouter.put("/:id/reorder", zValidator("json", reorderFolderSchema), async (c) => {
+  const userId = c.get("userId");
+  const folderId = c.req.param("id");
+  const { newIndex } = c.req.valid("json");
 
-    // Check if folder exists and belongs to user
-    const folderToMove = await db.query.folders.findFirst({
-      where: and(eq(folders.id, folderId), eq(folders.userId, userId)),
+  // Check if folder exists and belongs to user
+  const folderToMove = await db.query.folders.findFirst({
+    where: and(eq(folders.id, folderId), eq(folders.userId, userId)),
+  });
+
+  if (!folderToMove) {
+    throw new HTTPException(404, { message: "Folder not found" });
+  }
+
+  // Get all folders in the same parent scope (same parentId) for this user
+  const siblingFolders = await db.query.folders.findMany({
+    where: and(
+      eq(folders.userId, userId),
+      folderToMove.parentId ? eq(folders.parentId, folderToMove.parentId) : isNull(folders.parentId)
+    ),
+    orderBy: [asc(folders.sortOrder), desc(folders.createdAt)],
+  });
+
+  // Validate newIndex
+  if (newIndex < 0 || newIndex >= siblingFolders.length) {
+    throw new HTTPException(400, { message: "Invalid new index" });
+  }
+
+  // Find current position of the folder
+  const currentIndex = siblingFolders.findIndex((folder) => folder.id === folderId);
+  if (currentIndex === -1) {
+    throw new HTTPException(404, { message: "Folder not found in siblings" });
+  }
+
+  // If already in correct position, no need to do anything
+  if (currentIndex === newIndex) {
+    return c.json({ message: "Folder already in correct position" });
+  }
+
+  try {
+    // Use a transaction to ensure consistency
+    await db.transaction(async (tx) => {
+      // Create a new array with the folder moved to the new position
+      const reorderedFolders = [...siblingFolders];
+      const [movedFolder] = reorderedFolders.splice(currentIndex, 1);
+      reorderedFolders.splice(newIndex, 0, movedFolder);
+
+      // Update sort order for all affected folders
+      const updatePromises = reorderedFolders.map((folder, index) =>
+        tx
+          .update(folders)
+          .set({
+            sortOrder: index,
+            updatedAt: new Date(),
+          })
+          .where(eq(folders.id, folder.id))
+      );
+
+      await Promise.all(updatePromises);
     });
 
-    if (!folderToMove) {
-      throw new HTTPException(404, { message: "Folder not found" });
-    }
+    // Invalidate cache
+    await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));
 
-    // Get all folders in the same parent scope (same parentId) for this user
-    const siblingFolders = await db.query.folders.findMany({
-      where: and(
-        eq(folders.userId, userId),
-        folderToMove.parentId
-          ? eq(folders.parentId, folderToMove.parentId)
-          : isNull(folders.parentId),
-      ),
-      orderBy: [asc(folders.sortOrder), desc(folders.createdAt)],
+    return c.json({
+      message: "Folder reordered successfully",
+      folderId,
+      newIndex,
     });
-
-    // Validate newIndex
-    if (newIndex < 0 || newIndex >= siblingFolders.length) {
-      throw new HTTPException(400, { message: "Invalid new index" });
-    }
-
-    // Find current position of the folder
-    const currentIndex = siblingFolders.findIndex(
-      (folder) => folder.id === folderId,
-    );
-    if (currentIndex === -1) {
-      throw new HTTPException(404, { message: "Folder not found in siblings" });
-    }
-
-    // If already in correct position, no need to do anything
-    if (currentIndex === newIndex) {
-      return c.json({ message: "Folder already in correct position" });
-    }
-
-    try {
-      // Use a transaction to ensure consistency
-      await db.transaction(async (tx) => {
-        // Create a new array with the folder moved to the new position
-        const reorderedFolders = [...siblingFolders];
-        const [movedFolder] = reorderedFolders.splice(currentIndex, 1);
-        reorderedFolders.splice(newIndex, 0, movedFolder);
-
-        // Update sort order for all affected folders
-        const updatePromises = reorderedFolders.map((folder, index) =>
-          tx
-            .update(folders)
-            .set({
-              sortOrder: index,
-              updatedAt: new Date(),
-            })
-            .where(eq(folders.id, folder.id)),
-        );
-
-        await Promise.all(updatePromises);
-      });
-
-      return c.json({
-        message: "Folder reordered successfully",
-        folderId,
-        newIndex,
-      });
-    } catch {
-      throw new HTTPException(500, { message: "Failed to reorder folders" });
-    }
-  },
-);
+  } catch {
+    throw new HTTPException(500, { message: "Failed to reorder folders" });
+  }
+});
 
 foldersRouter.delete("/:id", async (c) => {
   const userId = c.get("userId");
@@ -307,7 +322,7 @@ foldersRouter.delete("/:id", async (c) => {
           eq(folders.userId, userId),
           existingFolder.parentId
             ? eq(folders.parentId, existingFolder.parentId)
-            : isNull(folders.parentId),
+            : isNull(folders.parentId)
         ),
         orderBy: [asc(folders.sortOrder)],
       });
@@ -315,28 +330,36 @@ foldersRouter.delete("/:id", async (c) => {
       // Update sort order for remaining folders
       if (remainingFolders.length > 0) {
         const updatePromises = remainingFolders.map((folder, index) =>
-          tx
-            .update(folders)
-            .set({ sortOrder: index })
-            .where(eq(folders.id, folder.id)),
+          tx.update(folders).set({ sortOrder: index }).where(eq(folders.id, folder.id))
         );
 
         const updateResults = await Promise.all(updatePromises);
 
         // Verify all updates succeeded
-        const failedUpdates = updateResults.filter(result => result.rowCount === 0);
+        const failedUpdates = updateResults.filter((result) => result.rowCount === 0);
         if (failedUpdates.length > 0) {
           throw new Error(`Failed to reorder ${failedUpdates.length} folder(s) after deletion`);
         }
       }
     });
 
+    // Invalidate cache
+    await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));
+
     return c.json({ message: "Folder deleted successfully" });
   } catch (error) {
-    console.error(`Failed to delete folder ${folderId}:`, error);
+    logger.error(
+      `Failed to delete folder ${folderId}`,
+      {
+        folderId,
+        userId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+      error instanceof Error ? error : undefined
+    );
     throw new HTTPException(500, {
       message: "Failed to delete folder",
-      cause: error instanceof Error ? error.message : "Unknown error"
+      cause: error instanceof Error ? error.message : "Unknown error",
     });
   }
 });

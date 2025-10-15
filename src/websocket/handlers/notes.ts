@@ -1,8 +1,8 @@
 import { db, notes } from "../../db";
 import { eq, and } from "drizzle-orm";
-import { AuthenticatedWebSocket, WebSocketMessage } from '../types';
-import { ConnectionManager } from '../middleware/connection-manager';
-import { BaseResourceHandler } from './base';
+import { AuthenticatedWebSocket, WebSocketMessage } from "../types";
+import { ConnectionManager } from "../middleware/connection-manager";
+import { BaseResourceHandler } from "./base";
 
 export class NoteHandler extends BaseResourceHandler {
   constructor(connectionManager: ConnectionManager) {
@@ -11,10 +11,12 @@ export class NoteHandler extends BaseResourceHandler {
 
   async handleJoinNote(ws: AuthenticatedWebSocket, message: WebSocketMessage): Promise<void> {
     if (!message.noteId || !ws.userId) {
-      ws.send(JSON.stringify({
-        type: "error",
-        message: "Missing noteId or userId"
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          message: "Missing noteId or userId",
+        })
+      );
       return;
     }
 
@@ -25,10 +27,12 @@ export class NoteHandler extends BaseResourceHandler {
       });
 
       if (!existingNote) {
-        ws.send(JSON.stringify({
-          type: "error",
-          message: "Note not found or access denied"
-        }));
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "Note not found or access denied",
+          })
+        );
         return;
       }
 
@@ -37,17 +41,21 @@ export class NoteHandler extends BaseResourceHandler {
       // Track this connection for the specific note
       this._connectionManager.addNoteConnection(message.noteId, ws);
 
-      ws.send(JSON.stringify({
-        type: "note_joined",
-        noteId: message.noteId,
-        message: "Successfully joined note for real-time sync"
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "note_joined",
+          noteId: message.noteId,
+          message: "Successfully joined note for real-time sync",
+        })
+      );
     } catch (error) {
       console.error("Error joining note:", error);
-      ws.send(JSON.stringify({
-        type: "error",
-        message: "Failed to join note"
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          message: "Failed to join note",
+        })
+      );
     }
   }
 
@@ -61,18 +69,22 @@ export class NoteHandler extends BaseResourceHandler {
     // Remove connection from note tracking
     this._connectionManager.removeNoteConnection(message.noteId, ws);
 
-    ws.send(JSON.stringify({
-      type: "note_left",
-      noteId: message.noteId
-    }));
+    ws.send(
+      JSON.stringify({
+        type: "note_left",
+        noteId: message.noteId,
+      })
+    );
   }
 
   async handleNoteUpdate(ws: AuthenticatedWebSocket, message: WebSocketMessage): Promise<void> {
     if (!ws.userId || !message.noteId) {
-      ws.send(JSON.stringify({
-        type: "error",
-        message: "Missing userId or noteId"
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          message: "Missing userId or noteId",
+        })
+      );
       return;
     }
 
@@ -83,31 +95,51 @@ export class NoteHandler extends BaseResourceHandler {
       });
 
       if (!existingNote) {
-        ws.send(JSON.stringify({
-          type: "error",
-          message: "Note not found or access denied"
-        }));
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "Note not found or access denied",
+          })
+        );
         return;
       }
 
       // Apply the changes to the database
       if (message.changes && Object.keys(message.changes).length > 0) {
-        const allowedFields = ['title', 'content', 'encryptedTitle', 'encryptedContent', 'starred', 'archived', 'deleted', 'hidden', 'folderId'];
+        const allowedFields = [
+          "title",
+          "content",
+          "encryptedTitle",
+          "encryptedContent",
+          "starred",
+          "archived",
+          "deleted",
+          "hidden",
+          "folderId",
+        ];
         const filteredChanges: Record<string, unknown> = {};
 
-        Object.keys(message.changes).forEach(key => {
+        Object.keys(message.changes).forEach((key) => {
           if (allowedFields.includes(key)) {
             const value = (message.changes as Record<string, unknown>)[key];
 
             // Validate title and content fields must be [ENCRYPTED]
-            if ((key === 'title' || key === 'content') && typeof value === 'string' && value !== '[ENCRYPTED]') {
-              console.warn(`Note update: rejected plaintext ${key} for note ${message.noteId} - must be [ENCRYPTED]`);
+            if (
+              (key === "title" || key === "content") &&
+              typeof value === "string" &&
+              value !== "[ENCRYPTED]"
+            ) {
+              console.warn(
+                `Note update: rejected plaintext ${key} for note ${message.noteId} - must be [ENCRYPTED]`
+              );
               return;
             }
 
             filteredChanges[key] = value;
           } else {
-            console.warn(`Note update: filtered out disallowed field '${key}' for note ${message.noteId}`);
+            console.warn(
+              `Note update: filtered out disallowed field '${key}' for note ${message.noteId}`
+            );
           }
         });
 
@@ -130,56 +162,69 @@ export class NoteHandler extends BaseResourceHandler {
             changes: filteredChanges,
             updatedNote,
             timestamp: Date.now(),
-            fromUserId: ws.userId
+            fromUserId: ws.userId,
           };
 
-          const sentCount = this._connectionManager.broadcastToUserDevices(ws.userId, syncMessage, ws);
+          const sentCount = this._connectionManager.broadcastToUserDevices(
+            ws.userId,
+            syncMessage,
+            ws
+          );
           console.log(`Broadcasted message to ${sentCount} devices for user ${ws.userId}`);
 
           // Send confirmation to the originating device
-          ws.send(JSON.stringify({
-            type: "note_update_success",
-            noteId: message.noteId,
-            updatedNote,
-            timestamp: Date.now()
-          }));
+          ws.send(
+            JSON.stringify({
+              type: "note_update_success",
+              noteId: message.noteId,
+              updatedNote,
+              timestamp: Date.now(),
+            })
+          );
         } else {
-          console.warn(`Note update: no valid changes found for note ${message.noteId}, original changes:`, message.changes);
-          ws.send(JSON.stringify({
-            type: "error",
-            message: "No valid fields to update"
-          }));
+          console.warn(
+            `Note update: no valid changes found for note ${message.noteId}, original changes:`,
+            message.changes
+          );
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              message: "No valid fields to update",
+            })
+          );
         }
       }
     } catch (error) {
       console.error("Error handling note update:", error);
-      ws.send(JSON.stringify({
-        type: "error",
-        message: "Failed to update note"
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "error",
+          message: "Failed to update note",
+        })
+      );
     }
   }
 
   async handleNoteCreated(ws: AuthenticatedWebSocket, message: WebSocketMessage): Promise<void> {
     return this.handleResourceOperation(ws, message, {
-      resourceType: 'note',
-      operation: 'created',
-      idField: 'noteId',
-      dataField: 'noteData',
+      resourceType: "note",
+      operation: "created",
+      idField: "noteId",
+      dataField: "noteData",
       requiresAuth: false,
-      syncMessageType: 'note_created_sync',
-      logAction: `created note ${message.noteData?.id}`
+      syncMessageType: "note_created_sync",
+      logAction: `created note ${message.noteData?.id}`,
     });
   }
 
   async handleNoteDeleted(ws: AuthenticatedWebSocket, message: WebSocketMessage): Promise<void> {
     return this.handleResourceOperation(ws, message, {
-      resourceType: 'note',
-      operation: 'deleted',
-      idField: 'noteId',
-      tableName: 'notes',
-      syncMessageType: 'note_deleted_sync',
-      logAction: `deleted note ${message.noteId}`
+      resourceType: "note",
+      operation: "deleted",
+      idField: "noteId",
+      tableName: "notes",
+      syncMessageType: "note_deleted_sync",
+      logAction: `deleted note ${message.noteId}`,
     });
   }
 }

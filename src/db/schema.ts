@@ -1,12 +1,4 @@
-import {
-  pgTable,
-  text,
-  timestamp,
-  boolean,
-  uuid,
-  integer,
-  index,
-} from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, uuid, integer, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 export const users = pgTable("users", {
@@ -72,18 +64,14 @@ export const fileAttachments = pgTable(
     mimeType: text("mime_type").notNull(),
     size: integer("size").notNull(),
     encryptedData: text("encrypted_data").notNull(), // Base64 encrypted content
-    encryptedTitle: text("encrypted_title")
-      .default("encrypted_placeholder")
-      .notNull(), // Encrypted filename with default placeholder
+    encryptedTitle: text("encrypted_title").default("encrypted_placeholder").notNull(), // Encrypted filename with default placeholder
     iv: text("iv").notNull(), // Initialization vector for decryption
     salt: text("salt").notNull(), // Salt used in encryption
-    uploadedAt: timestamp("uploaded_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => ({
     noteIdIdx: index("idx_file_attachments_note_id").on(table.noteId),
-  }),
+  })
 );
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -119,15 +107,12 @@ export const notesRelations = relations(notes, ({ one, many }) => ({
   attachments: many(fileAttachments),
 }));
 
-export const fileAttachmentsRelations = relations(
-  fileAttachments,
-  ({ one }) => ({
-    note: one(notes, {
-      fields: [fileAttachments.noteId],
-      references: [notes.id],
-    }),
+export const fileAttachmentsRelations = relations(fileAttachments, ({ one }) => ({
+  note: one(notes, {
+    fields: [fileAttachments.noteId],
+    references: [notes.id],
   }),
-);
+}));
 
 export type User = typeof users.$inferSelect;
 export type UserInsert = typeof users.$inferInsert;

@@ -21,18 +21,23 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - 🔄 **Real-time Sync** via WebSockets for multi-device support
 - ⚡ **Fast & Type-Safe** with TypeScript and Hono
 - 🐘 **PostgreSQL** with Drizzle ORM
+- 🚀 **Valkey/Redis Caching** for high-performance data access with cluster support
+- 📊 **New Relic APM** integration for monitoring, metrics, and error tracking
 - 💻 **Code Execution** via secure Judge0 API proxy
-- 📊 **Production Ready** with structured logging and error handling
+- 🛡️ **Comprehensive Rate Limiting** for HTTP, WebSocket, file uploads, and code execution
 - 🏥 **Health Checks** with detailed system status and readiness probes
+- 📈 **Structured Logging** with automatic metrics and business event tracking
 
 ## Tech Stack
 
 - **Runtime**: Node.js 20+ (LTS recommended)
 - **Framework**: [Hono](https://hono.dev/) - Fast, lightweight web framework
 - **Database**: PostgreSQL with [Drizzle ORM](https://orm.drizzle.team/)
+- **Cache**: Valkey/Redis Cluster for high-performance caching
 - **Authentication**: [Clerk](https://clerk.com/)
 - **Validation**: [Zod](https://zod.dev/)
-- **Logging**: Structured console logging for development and production
+- **Monitoring**: [New Relic APM](https://newrelic.com/) for metrics, logging, and error tracking
+- **Logging**: Structured JSON logging with automatic New Relic integration
 - **TypeScript**: Strict mode enabled for type safety
 
 ## Prerequisites
@@ -41,6 +46,8 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - pnpm 9.15.0+
 - PostgreSQL database (local installation or Docker)
 - Clerk account for authentication ([sign up here](https://dashboard.clerk.com))
+- Valkey/Redis cluster for caching (optional - improves performance)
+- New Relic account for monitoring (optional - [sign up here](https://newrelic.com/signup))
 - Judge0 API key for code execution (optional - [get from RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce))
 
 ## Local Development Setup
@@ -222,12 +229,14 @@ All `/api/*` endpoints require authentication via Bearer token in the Authorizat
 The API provides real-time synchronization via WebSocket connection at `ws://localhost:3000` (or your configured port).
 
 **Connection Flow:**
+
 1. Connect to WebSocket endpoint
 2. Send authentication message with Clerk JWT token
 3. Join/leave specific notes for real-time updates
 4. Receive real-time sync messages for notes and folders
 
 **Message Types:**
+
 - `auth` - Authenticate with JWT token
 - `ping`/`pong` - Heartbeat messages
 - `join_note`/`leave_note` - Subscribe/unsubscribe from note updates
@@ -236,6 +245,7 @@ The API provides real-time synchronization via WebSocket connection at `ws://loc
 - `folder_created`/`folder_updated`/`folder_deleted` - Folder events
 
 **Security Features:**
+
 - JWT authentication required for all operations
 - Authorization checks ensure users only access their own notes/folders
 - Rate limiting (configurable, default: 300 messages per minute per connection)
@@ -261,29 +271,43 @@ The application uses the following main tables:
 - **WebSocket Security**: JWT authentication, rate limiting, and connection limits
 - **Real-time Authorization**: Database-level ownership validation for all WebSocket operations
 
-
 ## Environment Variables
 
-| Variable                     | Description                                  | Required | Default     |
-| ---------------------------- | -------------------------------------------- | -------- | ----------- |
-| `DATABASE_URL`               | PostgreSQL connection string                 | Yes      | -           |
-| `CLERK_SECRET_KEY`           | Clerk secret key for JWT verification        | Yes      | -           |
-| `CORS_ORIGINS`               | Comma-separated list of allowed CORS origins | Yes      | -           |
-| `PORT`                       | Server port                                  | No       | 3000        |
-| `NODE_ENV`                   | Environment (development/production)         | No       | development |
-| `MAX_FILE_SIZE_MB`           | Maximum size per file in MB                  | No       | 50          |
-| `MAX_NOTE_SIZE_MB`           | Maximum total attachments per note in MB     | No       | 1024 (1GB)  |
-| `FREE_TIER_STORAGE_GB`       | Free tier storage limit in GB               | No       | 1           |
-| `FREE_TIER_NOTE_LIMIT`       | Free tier note count limit                  | No       | 100         |
-| `DEBUG`                      | Enable debug logging in production           | No       | false       |
-| `WS_RATE_LIMIT_WINDOW_MS`    | WebSocket rate limit window in milliseconds  | No       | 60000 (1 min) |
-| `WS_RATE_LIMIT_MAX_MESSAGES` | Max WebSocket messages per window            | No       | 300         |
-| `WS_MAX_CONNECTIONS_PER_USER`| Max WebSocket connections per user          | No       | 20          |
-| `WS_AUTH_TIMEOUT_MS`         | WebSocket authentication timeout in milliseconds | No   | 30000 (30 sec) |
-| `JUDGE0_API_KEY`             | Judge0 API key for code execution            | No*      | -           |
-| `LOG_LEVEL`                  | Logging level (error/warn/info/debug)        | No       | info (prod), debug (dev) |
+| Variable                       | Description                                      | Required | Default                          |
+| ------------------------------ | ------------------------------------------------ | -------- | -------------------------------- |
+| `DATABASE_URL`                 | PostgreSQL connection string                     | Yes      | -                                |
+| `CLERK_SECRET_KEY`             | Clerk secret key for JWT verification            | Yes      | -                                |
+| `CORS_ORIGINS`                 | Comma-separated list of allowed CORS origins     | Yes      | -                                |
+| `PORT`                         | Server port                                      | No       | 3000                             |
+| `NODE_ENV`                     | Environment (development/production)             | No       | development                      |
+| **Caching (Optional)**         |                                                  |          |                                  |
+| `VALKEY_HOST`                  | Valkey/Redis cluster hostname                    | No       | -                                |
+| `VALKEY_PORT`                  | Valkey/Redis cluster port                        | No       | 6379                             |
+| **Monitoring (Optional)**      |                                                  |          |                                  |
+| `NEW_RELIC_APP_NAME`           | Application name in New Relic                    | No       | Typelets API                     |
+| `NEW_RELIC_LICENSE_KEY`        | New Relic license key                            | No       | -                                |
+| `NEW_RELIC_LOG_LEVEL`          | New Relic log level (error/warn/info/debug)      | No       | warn (dev), info (prod)          |
+| **Rate Limiting**              |                                                  |          |                                  |
+| `HTTP_RATE_LIMIT_WINDOW_MS`    | HTTP rate limit window in milliseconds           | No       | 900000 (15 min)                  |
+| `HTTP_RATE_LIMIT_MAX_REQUESTS` | Max HTTP requests per window                     | No       | 1000                             |
+| `HTTP_FILE_RATE_LIMIT_MAX`     | Max file operations per window                   | No       | 100                              |
+| `WS_RATE_LIMIT_WINDOW_MS`      | WebSocket rate limit window in milliseconds      | No       | 60000 (1 min)                    |
+| `WS_RATE_LIMIT_MAX_MESSAGES`   | Max WebSocket messages per window                | No       | 300                              |
+| `WS_MAX_CONNECTIONS_PER_USER`  | Max WebSocket connections per user               | No       | 20                               |
+| `WS_AUTH_TIMEOUT_MS`           | WebSocket authentication timeout in milliseconds | No       | 30000 (30 sec)                   |
+| `CODE_EXEC_RATE_LIMIT_MAX`     | Max code executions per window                   | No       | 100 (dev), 50 (prod)             |
+| `CODE_EXEC_RATE_WINDOW_MS`     | Code execution rate limit window in milliseconds | No       | 900000 (15 min)                  |
+| **File & Storage**             |                                                  |          |                                  |
+| `MAX_FILE_SIZE_MB`             | Maximum size per file in MB                      | No       | 50                               |
+| `MAX_NOTE_SIZE_MB`             | Maximum total attachments per note in MB         | No       | 1024 (1GB)                       |
+| `FREE_TIER_STORAGE_GB`         | Free tier storage limit in GB                    | No       | 1                                |
+| `FREE_TIER_NOTE_LIMIT`         | Free tier note count limit                       | No       | 100                              |
+| **Code Execution (Optional)**  |                                                  |          |                                  |
+| `JUDGE0_API_KEY`               | Judge0 API key for code execution                | No\*     | -                                |
+| `JUDGE0_API_URL`               | Judge0 API base URL                              | No       | https://judge0-ce.p.rapidapi.com |
+| `JUDGE0_API_HOST`              | Judge0 API host header                           | No       | judge0-ce.p.rapidapi.com         |
 
-*Required only for code execution features
+\*Required only for code execution features
 
 ## Development
 
@@ -295,15 +319,20 @@ src/
 │   ├── index.ts        # Database connection
 │   └── schema.ts       # Database schema definitions
 ├── lib/
+│   ├── cache.ts        # Valkey/Redis cluster caching layer
+│   ├── cache-keys.ts   # Centralized cache key patterns and TTL values
+│   ├── logger.ts       # Structured logging with New Relic integration
 │   └── validation.ts   # Zod validation schemas
 ├── middleware/
 │   ├── auth.ts         # Authentication middleware
 │   ├── rate-limit.ts   # Rate limiting middleware
-│   └── security.ts     # Security headers middleware
+│   ├── security.ts     # Security headers middleware
+│   └── usage.ts        # Storage and usage limit enforcement
 ├── routes/
 │   ├── code.ts         # Code execution routes (Judge0 proxy)
 │   ├── files.ts        # File attachment routes
-│   ├── folders.ts      # Folder management routes
+│   ├── folders.ts      # Folder management routes with caching
+│   ├── metrics.ts      # Health checks and system metrics
 │   ├── notes.ts        # Note management routes
 │   └── users.ts        # User profile routes
 ├── types/
@@ -320,7 +349,7 @@ src/
 │   │   └── rate-limiter.ts        # WebSocket rate limiting
 │   ├── types.ts        # WebSocket message types
 │   └── index.ts        # Main WebSocket server manager
-└── server.ts           # Application entry point
+└── server.ts           # Application entry point with New Relic initialization
 ```
 
 ### Type Safety
@@ -380,7 +409,6 @@ This application is designed for production deployment using AWS ECS (Elastic Co
 - **Never use**: Local testing setup in production
 
 For production deployment, configure the same environment variables in your ECS task definition that you use locally in `.env`.
-
 
 ## Contributing
 

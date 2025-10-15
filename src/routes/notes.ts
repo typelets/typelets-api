@@ -2,11 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { HTTPException } from "hono/http-exception";
 import { db, notes } from "../db";
-import {
-  createNoteSchema,
-  updateNoteSchema,
-  notesQuerySchema,
-} from "../lib/validation";
+import { createNoteSchema, updateNoteSchema, notesQuerySchema } from "../lib/validation";
 import { eq, and, desc, or, ilike, count, SQL } from "drizzle-orm";
 import { checkNoteLimits } from "../middleware/usage";
 
@@ -40,25 +36,18 @@ notesRouter.get("/", zValidator("query", notesQuerySchema), async (c) => {
 
   if (query.search) {
     const escapedSearch = query.search
-      .replace(/\\/g, '\\\\')
-      .replace(/%/g, '\\%')
-      .replace(/_/g, '\\_');
+      .replace(/\\/g, "\\\\")
+      .replace(/%/g, "\\%")
+      .replace(/_/g, "\\_");
 
     conditions.push(
-      or(
-        ilike(notes.title, `%${escapedSearch}%`),
-        ilike(notes.content, `%${escapedSearch}%`),
-      )!,
+      or(ilike(notes.title, `%${escapedSearch}%`), ilike(notes.content, `%${escapedSearch}%`))!
     );
   }
 
-  const whereClause =
-    conditions.length > 1 ? and(...conditions) : conditions[0];
+  const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0];
 
-  const [{ total }] = await db
-    .select({ total: count() })
-    .from(notes)
-    .where(whereClause);
+  const [{ total }] = await db.select({ total: count() }).from(notes).where(whereClause);
 
   const offset = (query.page - 1) * query.limit;
   const userNotes = await db.query.notes.findMany({
@@ -73,7 +62,7 @@ notesRouter.get("/", zValidator("query", notesQuerySchema), async (c) => {
   });
 
   // Add attachmentCount to each note and remove full attachments array
-  const notesWithAttachmentCount = userNotes.map(note => ({
+  const notesWithAttachmentCount = userNotes.map((note) => ({
     ...note,
     attachmentCount: note.attachments.length,
     attachments: undefined,
@@ -157,9 +146,7 @@ notesRouter.delete("/empty-trash", async (c) => {
       .from(notes)
       .where(and(eq(notes.userId, userId), eq(notes.deleted, true)));
 
-    await db
-      .delete(notes)
-      .where(and(eq(notes.userId, userId), eq(notes.deleted, true)));
+    await db.delete(notes).where(and(eq(notes.userId, userId), eq(notes.deleted, true)));
 
     return c.json({
       success: true,

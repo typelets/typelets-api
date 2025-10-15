@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { verifyToken } from "@clerk/backend";
 import { db, users, folders, type User } from "../db";
 import { eq } from "drizzle-orm";
+import { logger } from "../lib/logger";
 import type {
   ClerkUserData,
   ClerkJWTPayload,
@@ -13,7 +14,7 @@ import type {
 
 if (!process.env.CLERK_SECRET_KEY) {
   throw new Error(
-    "Missing Clerk Secret Key - Please add CLERK_SECRET_KEY to your environment variables",
+    "Missing Clerk Secret Key - Please add CLERK_SECRET_KEY to your environment variables"
   );
 }
 
@@ -25,9 +26,7 @@ declare module "hono" {
   }
 }
 
-const extractAndVerifyClerkToken = async (
-  c: Context,
-): Promise<ClerkUserData | null> => {
+const extractAndVerifyClerkToken = async (c: Context): Promise<ClerkUserData | null> => {
   const authHeader = c.req.header("Authorization");
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -42,25 +41,21 @@ const extractAndVerifyClerkToken = async (
     })) as unknown as ClerkJWTPayload;
 
     try {
-      const userResponse = await fetch(
-        `https://api.clerk.com/v1/users/${payload.sub}`,
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
-            "Content-Type": "application/json",
-          },
+      const userResponse = await fetch(`https://api.clerk.com/v1/users/${payload.sub}`, {
+        headers: {
+          Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
+          "Content-Type": "application/json",
         },
-      );
+      });
 
       if (userResponse.ok) {
         const clerkUser: ClerkApiUser = await userResponse.json();
-        const userData: ClerkUserData = {
+        return {
           id: clerkUser.id,
           email: clerkUser.email_addresses?.[0]?.email_address || "",
           firstName: clerkUser.first_name || null,
           lastName: clerkUser.last_name || null,
         };
-        return userData;
       } else {
         return {
           id: payload.sub,
@@ -99,10 +94,8 @@ export const authMiddleware = async (c: Context, next: Next) => {
     try {
       const updateData: UserUpdateData = {};
       if (userData.email) updateData.email = userData.email;
-      if (userData.firstName !== undefined)
-        updateData.firstName = userData.firstName;
-      if (userData.lastName !== undefined)
-        updateData.lastName = userData.lastName;
+      if (userData.firstName !== undefined) updateData.firstName = userData.firstName;
+      if (userData.lastName !== undefined) updateData.lastName = userData.lastName;
 
       if (Object.keys(updateData).length > 0) {
         const [updatedUser] = await db
@@ -138,7 +131,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
         defaultFolders.map((folder) => ({
           ...folder,
           userId: newUser.id,
-        })),
+        }))
       );
 
       existingUser = newUser;
@@ -146,8 +139,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
       const dbError = error as DatabaseError;
       if (
         dbError.code === "23505" &&
-        (dbError.constraint_name === "users_pkey" ||
-          dbError.detail?.includes("already exists"))
+        (dbError.constraint_name === "users_pkey" || dbError.detail?.includes("already exists"))
       ) {
         existingUser = await db.query.users.findFirst({
           where: eq(users.id, userData.id),
@@ -159,7 +151,14 @@ export const authMiddleware = async (c: Context, next: Next) => {
           });
         }
       } else {
-        console.error("Database error creating user:", error);
+        logger.error(
+          "Database error creating user",
+          {
+            userId: userData.id,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          error instanceof Error ? error : undefined
+        );
         throw new HTTPException(500, {
           message: "Failed to create user profile",
         });

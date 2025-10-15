@@ -1,7 +1,7 @@
 import { verifyToken } from "@clerk/backend";
 import { createHash, createHmac } from "crypto";
-import { AuthenticatedWebSocket, WebSocketMessage, WebSocketConfig } from '../types';
-import { ConnectionManager } from '../middleware/connection-manager';
+import { AuthenticatedWebSocket, WebSocketMessage, WebSocketConfig } from "../types";
+import { ConnectionManager } from "../middleware/connection-manager";
 
 interface AuthenticatedMessage {
   payload: WebSocketMessage;
@@ -24,7 +24,7 @@ export class AuthHandler {
 
   private cleanupOldNonces(): void {
     const now = Date.now();
-    const fiveMinutesAgo = now - (5 * 60 * 1000);
+    const fiveMinutesAgo = now - 5 * 60 * 1000;
 
     // Remove expired nonces
     const noncesToDelete: string[] = [];
@@ -35,7 +35,7 @@ export class AuthHandler {
     });
 
     // Delete expired nonces
-    noncesToDelete.forEach(nonce => {
+    noncesToDelete.forEach((nonce) => {
       this.usedNonces.delete(nonce);
     });
 
@@ -44,19 +44,20 @@ export class AuthHandler {
       console.warn(`Nonce storage exceeded limit (${this.MAX_NONCES}), clearing all nonces`);
       this.usedNonces.clear();
     }
-
   }
 
   setupAuthTimeout(ws: AuthenticatedWebSocket): void {
     ws.authTimeout = setTimeout(() => {
       if (!ws.isAuthenticated) {
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === "development") {
           console.log("WebSocket connection closed due to authentication timeout");
         }
-        ws.send(JSON.stringify({
-          type: "error",
-          message: "Authentication timeout. Connection will be closed."
-        }));
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "Authentication timeout. Connection will be closed.",
+          })
+        );
         ws.close();
       }
     }, this._config.authTimeoutMs);
@@ -65,6 +66,7 @@ export class AuthHandler {
   async handleAuthentication(ws: AuthenticatedWebSocket, message: WebSocketMessage): Promise<void> {
     try {
       if (!message.token) {
+        // noinspection ExceptionCaughtLocallyJS
         throw new Error("Token is required");
       }
 
@@ -76,10 +78,12 @@ export class AuthHandler {
 
       // Check connection limit before allowing authentication
       if (!this.connectionManager.checkConnectionLimit(userId)) {
-        ws.send(JSON.stringify({
-          type: "error",
-          message: "Maximum connections exceeded for this user"
-        }));
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            message: "Maximum connections exceeded for this user",
+          })
+        );
         ws.close();
         return;
       }
@@ -87,7 +91,6 @@ export class AuthHandler {
       ws.userId = userId;
       ws.isAuthenticated = true;
       ws.jwtToken = message.token; // Store JWT token for signature verification
-
 
       // Clear authentication timeout since user is now authenticated
       if (ws.authTimeout) {
@@ -99,36 +102,39 @@ export class AuthHandler {
       const timestamp = Date.now();
       const flooredTimestamp = Math.floor(timestamp / 300000) * 300000; // 5-minute window
 
-      const sessionSecret = createHash('sha256')
+      const sessionSecret = createHash("sha256")
         .update(`${message.token}:${userId}:${flooredTimestamp}`)
-        .digest('hex');
-
+        .digest("hex");
 
       // Store session secret for this connection (for reference only)
       ws.sessionSecret = sessionSecret;
 
       this.connectionManager.addUserConnection(userId, ws);
 
-      ws.send(JSON.stringify({
-        type: "auth_success",
-        message: "Authentication successful",
-        userId: ws.userId,
-        sessionSecret: sessionSecret
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "auth_success",
+          message: "Authentication successful",
+          userId: ws.userId,
+          sessionSecret: sessionSecret,
+        })
+      );
 
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === "development") {
         console.log(`User ${ws.userId} authenticated via WebSocket`);
       }
     } catch (error: unknown) {
       console.error("WebSocket authentication failed:", error);
 
-      const isTokenExpired = (error as Record<string, unknown>)?.reason === 'token-expired';
+      const isTokenExpired = (error as Record<string, unknown>)?.reason === "token-expired";
 
-      ws.send(JSON.stringify({
-        type: "auth_failed",
-        message: isTokenExpired ? "Token expired" : "Authentication failed",
-        reason: isTokenExpired ? "token-expired" : "auth-failed"
-      }));
+      ws.send(
+        JSON.stringify({
+          type: "auth_failed",
+          message: isTokenExpired ? "Token expired" : "Authentication failed",
+          reason: isTokenExpired ? "token-expired" : "auth-failed",
+        })
+      );
       ws.close();
     }
   }
@@ -141,83 +147,68 @@ export class AuthHandler {
    * @param userId - The user ID for regenerating session secret
    * @returns Promise<boolean> - True if signature is valid
    */
-  async verifyMessageSignature(authMessage: AuthenticatedMessage, storedSessionSecret: string, jwtToken?: string, userId?: string): Promise<boolean> {
+  async verifyMessageSignature(
+    authMessage: AuthenticatedMessage,
+    storedSessionSecret: string,
+    jwtToken?: string,
+    userId?: string
+  ): Promise<boolean> {
     const { payload, signature, timestamp, nonce } = authMessage;
 
     // 1. Timestamp validation (5-minute window + 1 minute tolerance for clock skew)
     const messageAge = Date.now() - timestamp;
     const MAX_MESSAGE_AGE = 5 * 60 * 1000; // 5 minutes
-    if (messageAge > MAX_MESSAGE_AGE || messageAge < -60000) { // -60 seconds tolerance for clock skew
-      console.warn('Message rejected: timestamp out of range');
+    if (messageAge > MAX_MESSAGE_AGE || messageAge < -60000) {
+      // -60 seconds tolerance for clock skew
+      console.warn("Message rejected: timestamp out of range");
       return false;
     }
 
     // 2. Check for replay attack using nonce
     const nonceKey = `${nonce}:${timestamp}`;
     if (this.usedNonces.has(nonceKey)) {
-      console.warn('Message rejected: nonce already used (replay attack)');
+      console.warn("Message rejected: nonce already used (replay attack)");
       return false;
     }
 
     try {
       // 3. Validate required parameters
       if (!jwtToken || !userId) {
-        console.error('Missing JWT token or user ID for signature verification');
+        console.error("Missing JWT token or user ID for signature verification");
         return false;
       }
-
 
       // 4. Regenerate session secret for this timestamp window (matching frontend exactly)
       const flooredTimestamp = Math.floor(timestamp / 300000) * 300000;
       const sessionSecretInput = `${jwtToken}:${userId}:${flooredTimestamp}`;
 
-
-      const sessionSecret = createHash('sha256')
-        .update(sessionSecretInput, 'utf8')
-        .digest('hex');
-
-
       // 5. FIXED: Use hex session secret directly as HMAC key (matching frontend)
       // Frontend uses the hex string directly, not converted to buffer
-      const hmacKey = sessionSecret; // Use hex string directly
+      const sessionSecret = createHash("sha256").update(sessionSecretInput, "utf8").digest("hex");
 
       // 6. Create exact message data that was signed (order matters!)
       const messageToSign = { payload, timestamp, nonce };
       const messageData = JSON.stringify(messageToSign);
 
-
       // 7. Generate expected signature using hex string directly
-      const expectedSignature = createHmac('sha256', hmacKey)
-        .update(messageData, 'utf8')
-        .digest('base64');
+      const expectedSignature = createHmac("sha256", sessionSecret)
+        .update(messageData, "utf8")
+        .digest("base64");
 
       // 8. Test stored session secret with same approach
-      const storedSecretSignature = createHmac('sha256', storedSessionSecret)
-        .update(messageData, 'utf8')
-        .digest('base64');
-
-      // Test buffer conversion for comparison (kept for debugging)
-      const secretBuffer = Buffer.from(sessionSecret, 'hex');
-      const _altSignature1 = createHmac('sha256', secretBuffer)
-        .update(messageData, 'utf8')
-        .digest('base64');
-
-      const _altSignature2 = createHmac('sha256', sessionSecret)
-        .update(messageData, 'utf8')
-        .digest('base64');
-
+      const storedSecretSignature = createHmac("sha256", storedSessionSecret)
+        .update(messageData, "utf8")
+        .digest("base64");
 
       // 9. Compare signatures - check both regenerated and stored secret approaches
       const isValidRegenerated = expectedSignature === signature;
       const isValidStored = storedSecretSignature === signature;
       const isValid = isValidRegenerated || isValidStored;
 
-
-
       if (!isValid) {
-        console.warn('Message signature verification failed for user', userId);
+        console.warn("Message signature verification failed for user", userId);
       } else {
-        console.debug('Message signature verified successfully for user', userId);
+        console.debug("Message signature verified successfully for user", userId);
       }
 
       if (isValid) {
@@ -227,7 +218,7 @@ export class AuthHandler {
 
       return isValid;
     } catch (error) {
-      console.error('Error verifying message signature:', error);
+      console.error("Error verifying message signature:", error);
       return false;
     }
   }
@@ -238,26 +229,32 @@ export class AuthHandler {
    * @param rawMessage - The raw message (could be authenticated or plain)
    * @returns The extracted message payload or null if verification fails
    */
-  async processIncomingMessage(ws: AuthenticatedWebSocket, rawMessage: unknown): Promise<WebSocketMessage | null> {
+  async processIncomingMessage(
+    ws: AuthenticatedWebSocket,
+    rawMessage: unknown
+  ): Promise<WebSocketMessage | null> {
     // Type guard to check if this is an authenticated message structure
     if (this.isAuthenticatedMessage(rawMessage)) {
-
       // This is an authenticated message, verify signature
       if (!ws.sessionSecret) {
-        console.warn('Authenticated message received but no session secret available');
+        console.warn("Authenticated message received but no session secret available");
         return null;
       }
 
-      const isValid = await this.verifyMessageSignature(rawMessage, ws.sessionSecret, ws.jwtToken, ws.userId);
+      const isValid = await this.verifyMessageSignature(
+        rawMessage,
+        ws.sessionSecret,
+        ws.jwtToken,
+        ws.userId
+      );
       if (!isValid) {
-        console.warn('Message signature verification failed for user', ws.userId);
+        console.warn("Message signature verification failed for user", ws.userId);
         return null;
       }
 
       // Return the payload from authenticated message
       return rawMessage.payload;
     }
-
 
     // Handle non-authenticated messages (backward compatibility)
     return rawMessage as WebSocketMessage;
@@ -267,20 +264,20 @@ export class AuthHandler {
    * Type guard to check if a message has authentication structure
    */
   private isAuthenticatedMessage(message: unknown): message is AuthenticatedMessage {
-    if (typeof message !== 'object' || message === null) {
+    if (typeof message !== "object" || message === null) {
       return false;
     }
 
     const msg = message as Record<string, unknown>;
 
     return (
-      'payload' in msg &&
-      'signature' in msg &&
-      'timestamp' in msg &&
-      'nonce' in msg &&
-      typeof msg.signature === 'string' &&
-      typeof msg.timestamp === 'number' &&
-      typeof msg.nonce === 'string'
+      "payload" in msg &&
+      "signature" in msg &&
+      "timestamp" in msg &&
+      "nonce" in msg &&
+      typeof msg.signature === "string" &&
+      typeof msg.timestamp === "number" &&
+      typeof msg.nonce === "string"
     );
   }
 }

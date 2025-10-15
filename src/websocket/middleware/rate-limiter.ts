@@ -1,4 +1,4 @@
-import { AuthenticatedWebSocket, WebSocketConfig } from '../types';
+import { AuthenticatedWebSocket, WebSocketConfig } from "../types";
 
 export class RateLimiter {
   constructor(private readonly _config: WebSocketConfig) {}
@@ -10,7 +10,7 @@ export class RateLimiter {
     if (!ws.rateLimit) {
       ws.rateLimit = {
         count: 1,
-        windowStart: now
+        windowStart: now,
       };
       return true;
     }
@@ -20,7 +20,7 @@ export class RateLimiter {
     if (windowElapsed >= this._config.rateLimitWindowMs) {
       ws.rateLimit = {
         count: 1,
-        windowStart: now
+        windowStart: now,
       };
       return true;
     }

@@ -1,5 +1,5 @@
-import { WebSocket } from 'ws';
-import { AuthenticatedWebSocket, WebSocketConfig, ConnectionStats } from '../types';
+import { WebSocket } from "ws";
+import { AuthenticatedWebSocket, WebSocketConfig, ConnectionStats } from "../types";
 
 export class ConnectionManager {
   private userConnections = new Map<string, Set<AuthenticatedWebSocket>>();
@@ -49,7 +49,7 @@ export class ConnectionManager {
 
     // Clean up closed connections first
     const activeConnections = Array.from(userConnections).filter(
-      conn => conn.readyState === WebSocket.OPEN
+      (conn) => conn.readyState === WebSocket.OPEN
     );
 
     // Update the set with only active connections
@@ -60,12 +60,16 @@ export class ConnectionManager {
     return activeConnections.length < this._config.maxConnectionsPerUser;
   }
 
-  broadcastToUserDevices(userId: string, message: Record<string, unknown>, excludeWs?: AuthenticatedWebSocket): number {
+  broadcastToUserDevices(
+    userId: string,
+    message: Record<string, unknown>,
+    excludeWs?: AuthenticatedWebSocket
+  ): number {
     const connections = this.userConnections.get(userId);
     if (!connections) return 0;
 
     let sentCount = 0;
-    connections.forEach(conn => {
+    connections.forEach((conn) => {
       if (conn !== excludeWs && conn.readyState === WebSocket.OPEN) {
         conn.send(JSON.stringify(message));
         sentCount++;
@@ -101,10 +105,12 @@ export class ConnectionManager {
     return {
       totalConnections,
       authenticatedUsers: this.userConnections.size,
-      connectionsPerUser: Array.from(this.userConnections.entries()).map(([userId, connections]) => ({
-        userId,
-        deviceCount: connections.size
-      }))
+      connectionsPerUser: Array.from(this.userConnections.entries()).map(
+        ([userId, connections]) => ({
+          userId,
+          deviceCount: connections.size,
+        })
+      ),
     };
   }
 }
