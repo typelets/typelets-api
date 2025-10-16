@@ -114,7 +114,17 @@ export async function deleteCache(...keys: string[]): Promise<void> {
 
   const startTime = Date.now();
   try {
-    await cache.del(...keys);
+    // In cluster mode, keys may hash to different slots
+    // Use pipeline to delete individually (more efficient than separate awaits)
+    if (keys.length === 1) {
+      await cache.del(keys[0]);
+    } else {
+      const pipeline = cache.pipeline();
+      for (const key of keys) {
+        pipeline.del(key);
+      }
+      await pipeline.exec();
+    }
     const duration = Date.now() - startTime;
 
     // Log cache operation with metrics (use first key as representative)
@@ -149,11 +159,15 @@ export async function deleteCachePattern(pattern: string): Promise<void> {
     }
 
     if (keys.length > 0) {
-      // Delete in batches to avoid overwhelming the cluster
+      // Delete in batches using pipeline (cluster mode compatible)
       const batchSize = 100;
       for (let i = 0; i < keys.length; i += batchSize) {
         const batch = keys.slice(i, i + batchSize);
-        await cache.del(...batch);
+        const pipeline = cache.pipeline();
+        for (const key of batch) {
+          pipeline.del(key);
+        }
+        await pipeline.exec();
       }
 
       logger.info(`Deleted cache keys matching pattern`, {
