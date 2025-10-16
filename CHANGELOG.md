@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/typelets/typelets-api/compare/v1.7.2...v1.8.0) (2025-10-16)
+
+
+### Features
+
+* add comprehensive OpenAPI documentation and refactor routes ([5ca9cc6](https://github.com/typelets/typelets-api/commit/5ca9cc6397b8054c41a2be5575d7233757fc9a53))
+
 ## [1.7.2](https://github.com/typelets/typelets-api/compare/v1.7.1...v1.7.2) (2025-10-15)
 
 ### Bug Fixes
