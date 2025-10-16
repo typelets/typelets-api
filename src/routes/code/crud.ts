@@ -1,10 +1,17 @@
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
-import { z } from "zod";
-import { logger } from "../lib/logger";
+import { z } from "@hono/zod-openapi";
+import { logger } from "../../lib/logger";
+import {
+  executeCodeRequestSchema,
+  codeSubmissionResponseSchema,
+  codeExecutionStatusSchema,
+  languageSchema,
+  codeHealthResponseSchema,
+  tokenParamSchema,
+} from "../../lib/openapi-schemas";
 
-const codeRouter = new Hono();
+const crudRouter = new OpenAPIHono();
 
 const JUDGE0_API_URL = process.env.JUDGE0_API_URL || "https://judge0-ce.p.rapidapi.com";
 const JUDGE0_API_KEY = process.env.JUDGE0_API_KEY;
@@ -15,24 +22,9 @@ if (!JUDGE0_API_KEY) {
   process.exit(1);
 }
 
-const executeCodeSchema = z.object({
-  language_id: z.number().int().min(1).max(200),
-  source_code: z.string().min(1).max(50000),
-  stdin: z.string().max(10000).optional().default(""),
-  cpu_time_limit: z.number().min(1).max(30).optional().default(5),
-  memory_limit: z.number().min(16384).max(512000).optional().default(128000),
-  wall_time_limit: z.number().min(1).max(60).optional().default(10),
-});
-
-const tokenSchema = z.object({
-  token: z.string().min(1),
-});
-
 async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
   const url = `${JUDGE0_API_URL}${endpoint}`;
   const start = Date.now();
-
-  // Judge0 API call timing
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -42,7 +34,7 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
       ...options,
       signal: controller.signal,
       headers: {
-        "X-RapidAPI-Key": JUDGE0_API_KEY,
+        "X-RapidAPI-Key": JUDGE0_API_KEY!,
         "X-RapidAPI-Host": JUDGE0_API_HOST,
         "Content-Type": "application/json",
         ...options.headers,
@@ -65,11 +57,11 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
         status: response.status,
         statusText: response.statusText,
         endpoint,
-        errorBody: errorBody.substring(0, 200), // Limit error body length
+        errorBody: errorBody.substring(0, 200),
       });
 
       let clientMessage = "Code execution failed. Please try again.";
-      let statusCode = response.status;
+      let statusCode: number = response.status;
 
       if (response.status === 429) {
         clientMessage =
@@ -84,8 +76,7 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
         statusCode = 503;
       }
 
-      // noinspection ExceptionCaughtLocallyJS
-      throw new HTTPException(statusCode, {
+      throw new HTTPException(statusCode as any, {
         message: clientMessage,
       });
     }
@@ -98,7 +89,7 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
       throw error;
     }
 
-    if (error.name === "AbortError") {
+    if (error instanceof Error && error.name === "AbortError") {
       logger.error("Judge0 API timeout", { endpoint });
       throw new HTTPException(504, {
         message: "Code execution timed out. Please try again.",
@@ -119,7 +110,52 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
   }
 }
 
-codeRouter.post("/execute", zValidator("json", executeCodeSchema), async (c) => {
+// POST /api/code/execute - Execute code
+const executeCodeRoute = createRoute({
+  method: "post",
+  path: "/execute",
+  summary: "Execute code",
+  description:
+    "Submit code for execution via Judge0. Returns a token that can be used to check execution status. Supports 50+ programming languages.",
+  tags: ["Code Execution"],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: executeCodeRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Code submitted successfully",
+      content: {
+        "application/json": {
+          schema: codeSubmissionResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Invalid request body",
+    },
+    401: {
+      description: "Unauthorized - Invalid or missing authentication",
+    },
+    429: {
+      description: "Rate limit exceeded - Too many requests",
+    },
+    503: {
+      description: "Code execution service temporarily unavailable",
+    },
+    504: {
+      description: "Request timeout - Code execution took too long",
+    },
+  },
+  security: [{ Bearer: [] }],
+});
+
+crudRouter.openapi(executeCodeRoute, async (c) => {
   try {
     const body = c.req.valid("json");
 
@@ -154,7 +190,43 @@ codeRouter.post("/execute", zValidator("json", executeCodeSchema), async (c) => 
   }
 });
 
-codeRouter.get("/status/:token", zValidator("param", tokenSchema), async (c) => {
+// GET /api/code/status/:token - Get execution status
+const getStatusRoute = createRoute({
+  method: "get",
+  path: "/status/{token}",
+  summary: "Get execution status",
+  description:
+    "Check the status of a code execution submission. Returns stdout, stderr, execution time, memory usage, and status information.",
+  tags: ["Code Execution"],
+  request: {
+    params: tokenParamSchema,
+  },
+  responses: {
+    200: {
+      description: "Execution status retrieved successfully",
+      content: {
+        "application/json": {
+          schema: codeExecutionStatusSchema,
+        },
+      },
+    },
+    400: {
+      description: "Invalid token format",
+    },
+    401: {
+      description: "Unauthorized - Invalid or missing authentication",
+    },
+    404: {
+      description: "Submission not found",
+    },
+    503: {
+      description: "Code execution service temporarily unavailable",
+    },
+  },
+  security: [{ Bearer: [] }],
+});
+
+crudRouter.openapi(getStatusRoute, async (c) => {
   try {
     const { token } = c.req.valid("param");
 
@@ -194,7 +266,34 @@ codeRouter.get("/status/:token", zValidator("param", tokenSchema), async (c) => 
   }
 });
 
-codeRouter.get("/languages", async (c) => {
+// GET /api/code/languages - Get supported languages
+const getLanguagesRoute = createRoute({
+  method: "get",
+  path: "/languages",
+  summary: "Get supported languages",
+  description:
+    "Returns a list of all programming languages supported by the code execution service, including language IDs and versions.",
+  tags: ["Code Execution"],
+  responses: {
+    200: {
+      description: "Languages retrieved successfully",
+      content: {
+        "application/json": {
+          schema: z.array(languageSchema),
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized - Invalid or missing authentication",
+    },
+    503: {
+      description: "Code execution service temporarily unavailable",
+    },
+  },
+  security: [{ Bearer: [] }],
+});
+
+crudRouter.openapi(getLanguagesRoute, async (c) => {
   try {
     const response = await makeJudge0Request("/languages");
     const result = await response.json();
@@ -217,7 +316,46 @@ codeRouter.get("/languages", async (c) => {
   }
 });
 
-codeRouter.get("/health", async (c) => {
+// GET /api/code/health - Health check
+const getHealthRoute = createRoute({
+  method: "get",
+  path: "/health",
+  summary: "Health check",
+  description: "Check the health status of the code execution service and Judge0 connection.",
+  tags: ["Code Execution"],
+  responses: {
+    200: {
+      description: "Service is healthy",
+      content: {
+        "application/json": {
+          schema: codeHealthResponseSchema,
+        },
+      },
+    },
+    207: {
+      description: "Service is degraded but partially functional",
+      content: {
+        "application/json": {
+          schema: codeHealthResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized - Invalid or missing authentication",
+    },
+    503: {
+      description: "Service is unhealthy",
+      content: {
+        "application/json": {
+          schema: codeHealthResponseSchema,
+        },
+      },
+    },
+  },
+  security: [{ Bearer: [] }],
+});
+
+crudRouter.openapi(getHealthRoute, async (c) => {
   try {
     const response = await makeJudge0Request("/languages");
 
@@ -235,7 +373,7 @@ codeRouter.get("/health", async (c) => {
           timestamp: new Date().toISOString(),
         },
         207
-      ); // Multi-status
+      );
     }
   } catch (error) {
     logger.error(
@@ -256,4 +394,4 @@ codeRouter.get("/health", async (c) => {
   }
 });
 
-export default codeRouter;
+export default crudRouter;

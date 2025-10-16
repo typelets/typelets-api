@@ -39,7 +39,10 @@ export const createNoteSchema = z.object({
     .string()
     .refine((value) => value === "[ENCRYPTED]", "Content must be '[ENCRYPTED]'")
     .optional(),
-  folderId: z.string().uuid().nullable().optional(),
+  folderId: z.preprocess(
+    (val) => (val === "" ? null : val),
+    z.string().uuid().nullable().optional()
+  ),
   starred: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
 
@@ -58,7 +61,10 @@ export const updateNoteSchema = z.object({
     .string()
     .refine((value) => value === "[ENCRYPTED]", "Content must be '[ENCRYPTED]'")
     .optional(),
-  folderId: z.string().uuid().nullable().optional(),
+  folderId: z.preprocess(
+    (val) => (val === "" ? null : val),
+    z.string().uuid().nullable().optional()
+  ),
   starred: z.boolean().optional(),
   archived: z.boolean().optional(),
   deleted: z.boolean().optional(),

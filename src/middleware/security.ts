@@ -3,12 +3,17 @@ import { Context, Next } from "hono";
 export const securityHeaders = async (c: Context, next: Next): Promise<void> => {
   await next();
 
+  // Relax CSP for /docs endpoint (Swagger UI)
+  const isDocsEndpoint = c.req.path === "/docs";
+
   // Content Security Policy
   c.res.headers.set(
     "Content-Security-Policy",
     "default-src 'self'; " +
-      "script-src 'self'; " +
-      "style-src 'self' 'unsafe-inline'; " +
+      (isDocsEndpoint
+        ? "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; " +
+          "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        : "script-src 'self'; " + "style-src 'self' 'unsafe-inline'; ") +
       "img-src 'self' data: https:; " +
       "font-src 'self'; " +
       "connect-src 'self'; " +

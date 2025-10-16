@@ -170,6 +170,8 @@ If you prefer to install PostgreSQL locally instead of Docker:
 
 ## API Endpoints
 
+📚 **Full API documentation with interactive examples available at [https://api.typelets.com/docs](https://api.typelets.com/docs)** (Swagger/OpenAPI)
+
 ### Public Endpoints
 
 - `GET /` - API information and health status
