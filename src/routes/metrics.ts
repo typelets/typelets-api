@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, Context } from "hono";
 import { logger } from "../lib/logger";
 
 const metricsRouter = new Hono();
@@ -35,7 +35,7 @@ interface HealthStatus {
 }
 
 // Enhanced health check with more detailed status
-metricsRouter.get("/health", async (c) => {
+metricsRouter.get("/health", async (c: Context) => {
   const startTime = Date.now();
   const memUsage = process.memoryUsage();
   const environment = process.env.NODE_ENV || "development";
@@ -98,7 +98,7 @@ metricsRouter.get("/health", async (c) => {
 });
 
 // System metrics endpoint for monitoring dashboards
-metricsRouter.get("/metrics", async (c) => {
+metricsRouter.get("/metrics", async (c: Context) => {
   const startTime = Date.now();
   const memUsage = process.memoryUsage();
   const cpuUsage = process.cpuUsage();
@@ -121,7 +121,7 @@ metricsRouter.get("/metrics", async (c) => {
 });
 
 // Readiness probe for Kubernetes/ECS
-metricsRouter.get("/ready", async (c) => {
+metricsRouter.get("/ready", async (c: Context) => {
   // Simple readiness check - service is ready if it can respond
   return c.json({
     status: "ready",
@@ -130,7 +130,7 @@ metricsRouter.get("/ready", async (c) => {
 });
 
 // Liveness probe for Kubernetes/ECS
-metricsRouter.get("/live", async (c) => {
+metricsRouter.get("/live", async (c: Context) => {
   // Simple liveness check - service is alive if it can respond
   return c.json({
     status: "alive",

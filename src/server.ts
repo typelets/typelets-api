@@ -7,18 +7,24 @@ const isDevelopment = process.env.NODE_ENV === "development";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
+import { trimTrailingSlash } from "hono/trailing-slash";
 import { HTTPException } from "hono/http-exception";
 import { createServer } from "http";
+import { swaggerUI } from "@hono/swagger-ui";
 import { WebSocketManager } from "./websocket";
 import { authMiddleware } from "./middleware/auth";
 import { securityHeaders } from "./middleware/security";
 import { rateLimit, cleanup as rateLimitCleanup } from "./middleware/rate-limit";
 import { closeCache } from "./lib/cache";
-import foldersRouter from "./routes/folders";
-import notesRouter from "./routes/notes";
-import usersRouter from "./routes/users";
-import filesRouter from "./routes/files";
-import codeRouter from "./routes/code";
+import foldersCrudRouter from "./routes/folders/crud";
+import foldersActionsRouter from "./routes/folders/actions";
+import crudRouter from "./routes/notes/crud";
+import actionsRouter from "./routes/notes/actions";
+import trashRouter from "./routes/notes/trash";
+import countsRouter from "./routes/notes/counts";
+import usersRouter from "./routes/users/crud";
+import filesRouter from "./routes/files/crud";
+import codeRouter from "./routes/code/crud";
 import metricsRouter from "./routes/metrics";
 import { VERSION } from "./version";
 import { logger } from "./lib/logger";
@@ -36,7 +42,10 @@ const maxBodySize = Math.ceil(maxFileSize * 1.35);
 
 const app = new Hono();
 
-// Apply security headers first
+// Strip trailing slashes from all requests (fixes Swagger UI issue)
+app.use("*", trimTrailingSlash());
+
+// Apply security headers
 app.use("*", securityHeaders);
 
 // Add request logging middleware
@@ -76,7 +85,9 @@ const httpRateLimitMax = process.env.HTTP_RATE_LIMIT_MAX_REQUESTS
 
 const fileRateLimitMax = process.env.HTTP_FILE_RATE_LIMIT_MAX
   ? parseInt(process.env.HTTP_FILE_RATE_LIMIT_MAX)
-  : 100;
+  : process.env.NODE_ENV === "development"
+    ? 1000
+    : 100;
 
 logger.info("HTTP rate limiting configured", {
   windowMinutes: httpRateLimitWindow / 1000 / 60,
@@ -159,6 +170,151 @@ app.get("/health", (c) => {
   });
 });
 
+// OpenAPI documentation
+app.get(
+  "/docs",
+  swaggerUI({
+    url: "/api/openapi.json",
+    persistAuthorization: true, // Save token in browser
+  })
+);
+
+// Serve OpenAPI spec
+app.get("/api/openapi.json", (c) => {
+  // Get OpenAPI documents from routers
+  const usersDoc = (usersRouter as any).getOpenAPIDocument({
+    openapi: "3.1.0",
+    info: {
+      title: "Typelets API",
+      version: VERSION,
+      description:
+        "A secure, encrypted notes management API with folder organization and file attachments",
+      contact: {
+        name: "Typelets API",
+        url: "https://github.com/typelets/typelets-api",
+      },
+    },
+    servers: [
+      {
+        url: process.env.API_URL || "http://localhost:3000",
+        description: "API Server",
+      },
+    ],
+  });
+
+  const countsDoc = (countsRouter as any).getOpenAPIDocument({});
+  const crudDoc = (crudRouter as any).getOpenAPIDocument({});
+  const actionsDoc = (actionsRouter as any).getOpenAPIDocument({});
+  const trashDoc = (trashRouter as any).getOpenAPIDocument({});
+  const filesDoc = (filesRouter as any).getOpenAPIDocument({});
+  const codeDoc = (codeRouter as any).getOpenAPIDocument({});
+
+  // Merge paths from all routers into usersDoc
+  if (!usersDoc.paths) {
+    usersDoc.paths = {};
+  }
+
+  // Prefix users paths with /api/users
+  const prefixedUsersPaths: any = {};
+  Object.keys(usersDoc.paths).forEach((path) => {
+    prefixedUsersPaths[`/api/users${path}`] = usersDoc.paths[path];
+  });
+  usersDoc.paths = prefixedUsersPaths;
+
+  // Merge counts paths with /api/notes/counts prefix
+  if (countsDoc.paths) {
+    Object.keys(countsDoc.paths).forEach((path) => {
+      const fullPath =
+        path === "" || path === "/" ? "/api/notes/counts" : `/api/notes/counts${path}`;
+      usersDoc.paths[fullPath] = countsDoc.paths[path];
+    });
+  }
+
+  // Merge crud paths with /api/notes prefix
+  if (crudDoc.paths) {
+    Object.keys(crudDoc.paths).forEach((path) => {
+      const fullPath = path === "" || path === "/" ? "/api/notes" : `/api/notes${path}`;
+      usersDoc.paths[fullPath] = crudDoc.paths[path];
+    });
+  }
+
+  // Merge actions paths with /api/notes prefix
+  if (actionsDoc.paths) {
+    Object.keys(actionsDoc.paths).forEach((path) => {
+      const fullPath = path === "" || path === "/" ? "/api/notes" : `/api/notes${path}`;
+      usersDoc.paths[fullPath] = actionsDoc.paths[path];
+    });
+  }
+
+  // Merge trash paths with /api/notes prefix
+  if (trashDoc.paths) {
+    Object.keys(trashDoc.paths).forEach((path) => {
+      const fullPath = path === "" || path === "/" ? "/api/notes" : `/api/notes${path}`;
+      usersDoc.paths[fullPath] = trashDoc.paths[path];
+    });
+  }
+
+  // Merge files paths with /api prefix
+  if (filesDoc.paths) {
+    Object.keys(filesDoc.paths).forEach((path) => {
+      const fullPath = path === "" || path === "/" ? "/api" : `/api${path}`;
+      usersDoc.paths[fullPath] = filesDoc.paths[path];
+    });
+  }
+
+  // Merge code paths with /api/code prefix
+  if (codeDoc.paths) {
+    Object.keys(codeDoc.paths).forEach((path) => {
+      const fullPath = path === "" || path === "/" ? "/api/code" : `/api/code${path}`;
+      usersDoc.paths[fullPath] = codeDoc.paths[path];
+    });
+  }
+
+  // Merge schemas from all routers
+  if (!usersDoc.components) {
+    usersDoc.components = {};
+  }
+  if (!usersDoc.components.schemas) {
+    usersDoc.components.schemas = {};
+  }
+
+  if (countsDoc.components?.schemas) {
+    Object.assign(usersDoc.components.schemas, countsDoc.components.schemas);
+  }
+
+  if (crudDoc.components?.schemas) {
+    Object.assign(usersDoc.components.schemas, crudDoc.components.schemas);
+  }
+
+  if (actionsDoc.components?.schemas) {
+    Object.assign(usersDoc.components.schemas, actionsDoc.components.schemas);
+  }
+
+  if (trashDoc.components?.schemas) {
+    Object.assign(usersDoc.components.schemas, trashDoc.components.schemas);
+  }
+
+  if (filesDoc.components?.schemas) {
+    Object.assign(usersDoc.components.schemas, filesDoc.components.schemas);
+  }
+
+  if (codeDoc.components?.schemas) {
+    Object.assign(usersDoc.components.schemas, codeDoc.components.schemas);
+  }
+
+  // Manually add securitySchemes to components
+  usersDoc.components.securitySchemes = {
+    Bearer: {
+      type: "http",
+      scheme: "bearer",
+      bearerFormat: "JWT",
+      description: "Clerk authentication token",
+    },
+  };
+
+  return c.json(usersDoc);
+});
+
 app.get("/websocket/status", (c) => {
   if (!wsManager) {
     return c.json({ error: "WebSocket not initialized" }, 500);
@@ -201,8 +357,12 @@ app.use(
 );
 
 app.route("/api/users", usersRouter);
-app.route("/api/folders", foldersRouter);
-app.route("/api/notes", notesRouter);
+app.route("/api/folders", foldersCrudRouter);
+app.route("/api/folders", foldersActionsRouter);
+app.route("/api/notes/counts", countsRouter);
+app.route("/api/notes", trashRouter); // Register trash router before crud to avoid /{id} catching /empty-trash
+app.route("/api/notes", crudRouter);
+app.route("/api/notes", actionsRouter);
 app.route("/api/code", codeRouter);
 app.route("/api", filesRouter);
 
