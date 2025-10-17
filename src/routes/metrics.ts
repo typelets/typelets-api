@@ -54,7 +54,10 @@ metricsRouter.get("/health", async (c: Context) => {
   };
 
   // Database connectivity check
-  let databaseCheck = { status: "pass" as const, details: "Database connection healthy" };
+  let databaseCheck: { status: "pass" | "warn" | "fail"; details: string } = {
+    status: "pass",
+    details: "Database connection healthy",
+  };
   try {
     // Basic database health check could be added here
     // For now, assume healthy if no errors are thrown
@@ -97,27 +100,61 @@ metricsRouter.get("/health", async (c: Context) => {
   return c.json(healthStatus, statusCode);
 });
 
-// System metrics endpoint for monitoring dashboards
+// Prometheus metrics endpoint for Grafana (requires Basic Auth)
 metricsRouter.get("/metrics", async (c: Context) => {
-  const startTime = Date.now();
-  const memUsage = process.memoryUsage();
-  const cpuUsage = process.cpuUsage();
-  const environment = process.env.NODE_ENV || "development";
-  const version = process.env.npm_package_version || "1.0.0";
+  const metricsApiKey = process.env.METRICS_API_KEY;
 
-  const metrics: SystemMetrics = {
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: memUsage,
-    cpuUsage,
-    environment,
-    version,
-  };
+  // Check for Basic Auth authentication
+  if (!metricsApiKey) {
+    logger.warn("METRICS_API_KEY not configured - metrics endpoint is unprotected");
+  } else {
+    const authHeader = c.req.header("Authorization");
 
-  const duration = Date.now() - startTime;
-  logger.debug("System metrics retrieved", { duration });
+    if (!authHeader || !authHeader.startsWith("Basic ")) {
+      logger.warn("Unauthorized metrics access attempt - missing or invalid auth", {
+        ip: c.req.header("x-forwarded-for") || "unknown",
+        userAgent: c.req.header("user-agent") || "unknown",
+      });
+      c.header("WWW-Authenticate", 'Basic realm="Metrics"');
+      return c.text("Unauthorized", 401);
+    }
 
-  return c.json(metrics);
+    try {
+      // Decode Basic Auth credentials
+      const base64Credentials = authHeader.substring(6); // Remove "Basic "
+      const credentials = Buffer.from(base64Credentials, "base64").toString("utf-8");
+      const [username, password] = credentials.split(":");
+
+      // Verify password matches API key (username can be anything)
+      if (password !== metricsApiKey) {
+        logger.warn("Unauthorized metrics access attempt - invalid credentials", {
+          ip: c.req.header("x-forwarded-for") || "unknown",
+          userAgent: c.req.header("user-agent") || "unknown",
+          username: username || "empty",
+        });
+        c.header("WWW-Authenticate", 'Basic realm="Metrics"');
+        return c.text("Unauthorized", 401);
+      }
+    } catch (error) {
+      logger.warn("Unauthorized metrics access attempt - malformed auth header", {
+        ip: c.req.header("x-forwarded-for") || "unknown",
+        userAgent: c.req.header("user-agent") || "unknown",
+      });
+      c.header("WWW-Authenticate", 'Basic realm="Metrics"');
+      return c.text("Unauthorized", 401);
+    }
+  }
+
+  try {
+    const { register } = await import("../lib/prometheus");
+    const metrics = await register.metrics();
+    return c.text(metrics, 200, {
+      "Content-Type": register.contentType,
+    });
+  } catch (error) {
+    logger.error("Failed to generate Prometheus metrics", {}, error as Error);
+    return c.text("Error generating metrics", 500);
+  }
 });
 
 // Readiness probe for Kubernetes/ECS

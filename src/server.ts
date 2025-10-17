@@ -1,5 +1,3 @@
-const newrelic = require("newrelic");
-
 import "dotenv-flow/config";
 
 const isDevelopment = process.env.NODE_ENV === "development";
@@ -28,14 +26,6 @@ import codeRouter from "./routes/code/crud";
 import metricsRouter from "./routes/metrics";
 import { VERSION } from "./version";
 import { logger } from "./lib/logger";
-
-// Verify New Relic is connected
-if (newrelic.agent?.config?.agent_enabled) {
-  console.log("✅ New Relic agent is enabled");
-  console.log("📊 App Name:", newrelic.agent.config.app_name);
-} else {
-  logger.error("New Relic agent is NOT enabled - check license key");
-}
 
 const maxFileSize = process.env.MAX_FILE_SIZE_MB ? parseInt(process.env.MAX_FILE_SIZE_MB) : 50;
 const maxBodySize = Math.ceil(maxFileSize * 1.35);

@@ -1,4 +1,4 @@
-import * as newrelic from "newrelic";
+import * as prometheus from "./prometheus";
 
 interface LogLevel {
   level: string;
@@ -19,14 +19,11 @@ class Logger {
   private service: string;
   private version: string;
   private currentLogLevel: LogLevel;
-  private newrelicEnabled: boolean;
 
   constructor() {
     this.environment = process.env.NODE_ENV || "development";
     this.service = "typelets-api";
     this.version = process.env.npm_package_version || "1.0.0";
-    // Check if New Relic is properly initialized
-    this.newrelicEnabled = typeof newrelic === "object" && !!newrelic;
 
     // Set log level based on environment
     const logLevelName =
@@ -55,29 +52,12 @@ class Logger {
   error(message: string, meta: LogMetadata = {}, error?: Error): void {
     if (this.shouldLog(LOG_LEVELS.error)) {
       console.error(this.formatLog("error", message, meta));
-
-      // Send error to New Relic
-      if (this.newrelicEnabled) {
-        if (error) {
-          newrelic.noticeError(error, meta);
-        } else {
-          newrelic.noticeError(new Error(message), meta);
-        }
-      }
     }
   }
 
   warn(message: string, meta: LogMetadata = {}): void {
     if (this.shouldLog(LOG_LEVELS.warn)) {
       console.warn(this.formatLog("warn", message, meta));
-
-      // Log warning as custom event in New Relic
-      if (this.newrelicEnabled) {
-        newrelic.recordCustomEvent("ApplicationWarning", {
-          message,
-          ...meta,
-        });
-      }
     }
   }
 
@@ -110,18 +90,12 @@ class Logger {
       userId: userId || "anonymous",
     });
 
-    // Record metrics to New Relic
-    if (this.newrelicEnabled) {
-      // Record response time
-      this.recordMetric("Custom/HTTP/ResponseTime", duration);
-
-      // Record status code metrics
-      const statusCategory = Math.floor(statusCode / 100);
-      this.recordMetric(`Custom/HTTP/Status/${statusCategory}xx`, 1);
-
-      // Record request count by method
-      this.recordMetric(`Custom/HTTP/Method/${method}`, 1);
-    }
+    // Record Prometheus metrics
+    prometheus.httpRequestsTotal.inc({ method, path, status: statusCode.toString() });
+    prometheus.httpRequestDuration.observe(
+      { method, path, status: statusCode.toString() },
+      duration
+    );
   }
 
   websocketEvent(eventType: string, userId?: string, connectionCount?: number): void {
@@ -146,6 +120,10 @@ class Logger {
       duration,
       userId: userId || "anonymous",
     });
+
+    // Record Prometheus metrics
+    prometheus.databaseQueriesTotal.inc({ operation, table });
+    prometheus.databaseQueryDuration.observe({ operation, table }, duration);
   }
 
   codeExecution(languageId: number, duration: number, success: boolean, userId?: string): void {
@@ -166,15 +144,8 @@ class Logger {
       ...metadata,
     });
 
-    // Record business event to New Relic
-    if (this.newrelicEnabled) {
-      this.recordCustomEvent("BusinessEvent", {
-        eventName,
-        userId,
-        ...metadata,
-      });
-      this.recordMetric(`Custom/Business/${eventName}`, 1);
-    }
+    // Record Prometheus metrics
+    prometheus.businessEventsTotal.inc({ event_name: eventName });
   }
 
   securityEvent(
@@ -189,28 +160,8 @@ class Logger {
       ...details,
     });
 
-    // Record security event to New Relic
-    if (this.newrelicEnabled) {
-      this.recordCustomEvent("SecurityEvent", {
-        eventType,
-        severity,
-        ...details,
-      });
-      this.recordMetric(`Custom/Security/${severity}`, 1);
-    }
-  }
-
-  // New Relic specific methods
-  recordMetric(name: string, value: number): void {
-    if (this.newrelicEnabled) {
-      newrelic.recordMetric(name, value);
-    }
-  }
-
-  recordCustomEvent(eventType: string, attributes: LogMetadata): void {
-    if (this.newrelicEnabled) {
-      newrelic.recordCustomEvent(eventType, attributes);
-    }
+    // Record Prometheus metrics
+    prometheus.securityEventsTotal.inc({ event_type: eventType, severity });
   }
 
   // Cache-specific logging methods
@@ -236,25 +187,18 @@ class Logger {
     // Log at debug level
     this.debug(`Cache ${operation}${hit !== undefined ? (hit ? " HIT" : " MISS") : ""}`, meta);
 
-    // Send metrics to New Relic
-    if (this.newrelicEnabled) {
-      if (operation === "get" && hit !== undefined) {
-        this.recordMetric(`Custom/Cache/${hit ? "Hit" : "Miss"}`, 1);
-        if (duration !== undefined) {
-          this.recordMetric("Custom/Cache/GetDuration", duration);
-        }
-      } else if (operation === "set" && duration !== undefined) {
-        this.recordMetric("Custom/Cache/Set", 1);
-        this.recordMetric("Custom/Cache/SetDuration", duration);
-      } else if (operation === "delete") {
-        this.recordMetric("Custom/Cache/Delete", keyCount || 1);
-        if (duration !== undefined) {
-          this.recordMetric("Custom/Cache/DeleteDuration", duration);
-        }
-      }
+    // Record Prometheus metrics
+    prometheus.cacheOperationsTotal.inc({
+      operation,
+      status: hit !== undefined ? (hit ? "hit" : "miss") : "success",
+    });
 
-      // Record custom event for detailed analysis
-      this.recordCustomEvent("CacheOperation", meta);
+    if (hit !== undefined) {
+      prometheus.cacheHitRate.inc({ result: hit ? "hit" : "miss" });
+    }
+
+    if (duration !== undefined) {
+      prometheus.cacheOperationDuration.observe({ operation }, duration);
     }
   }
 
@@ -270,9 +214,8 @@ class Logger {
       error
     );
 
-    if (this.newrelicEnabled) {
-      this.recordMetric("Custom/Cache/Error", 1);
-    }
+    // Record Prometheus metrics
+    prometheus.cacheOperationsTotal.inc({ operation, status: "error" });
   }
 }
 
