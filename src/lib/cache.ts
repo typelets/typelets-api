@@ -1,5 +1,7 @@
 import { Cluster, ClusterOptions } from "ioredis";
 import { logger } from "./logger";
+import { db, folders } from "../db";
+import { eq } from "drizzle-orm";
 
 let client: Cluster | null = null;
 
@@ -182,5 +184,104 @@ export async function deleteCachePattern(pattern: string): Promise<void> {
       pattern,
       error instanceof Error ? error : new Error(String(error))
     );
+  }
+}
+
+/**
+ * Recursively get all ancestor folder IDs for a given folder
+ * @param folderId - The folder ID to start from
+ * @returns Array of ancestor folder IDs (from immediate parent to root)
+ */
+async function getAncestorFolderIds(folderId: string): Promise<string[]> {
+  const ancestorIds: string[] = [];
+  let currentFolderId: string | null = folderId;
+
+  // Traverse up the hierarchy until we reach a root folder (parentId is null)
+  while (currentFolderId) {
+    const folder: { parentId: string | null } | undefined = await db.query.folders.findFirst({
+      where: eq(folders.id, currentFolderId),
+      columns: {
+        parentId: true,
+      },
+    });
+
+    if (!folder || !folder.parentId) {
+      break;
+    }
+
+    ancestorIds.push(folder.parentId);
+    currentFolderId = folder.parentId;
+  }
+
+  return ancestorIds;
+}
+
+/**
+ * Invalidate note counts cache for a user and all ancestor folders
+ * This should be called whenever notes are created, updated, deleted, or their properties change
+ * @param userId - The user ID
+ * @param folderId - The folder ID where the note resides (null for root level notes)
+ */
+export async function invalidateNoteCounts(userId: string, folderId: string | null): Promise<void> {
+  const cache = getCacheClient();
+  if (!cache) return;
+
+  try {
+    const cacheKeys: string[] = [];
+
+    // Always invalidate user's global counts (matches CacheKeys.notesCounts pattern)
+    cacheKeys.push(`notes:${userId}:counts`);
+
+    // If note is in a folder, invalidate that folder and all ancestors
+    if (folderId) {
+      // Invalidate the immediate folder (matches counts.ts line 89 pattern)
+      cacheKeys.push(`notes:${userId}:folder:${folderId}:counts`);
+
+      // Get and invalidate all ancestor folders
+      const ancestorIds = await getAncestorFolderIds(folderId);
+      for (const ancestorId of ancestorIds) {
+        cacheKeys.push(`notes:${userId}:folder:${ancestorId}:counts`);
+      }
+    }
+
+    // Delete all cache keys using pipeline for cluster compatibility
+    if (cacheKeys.length > 0) {
+      await deleteCache(...cacheKeys);
+      logger.debug("Invalidated note counts cache", {
+        userId,
+        folderId: folderId || "root",
+        keysInvalidated: cacheKeys.length,
+      });
+    }
+  } catch (error) {
+    logger.error(
+      "Failed to invalidate note counts cache",
+      {
+        userId,
+        folderId: folderId || "root",
+      },
+      error instanceof Error ? error : new Error(String(error))
+    );
+  }
+}
+
+/**
+ * Invalidate note counts cache when a note moves between folders
+ * Invalidates both old and new folder hierarchies
+ * @param userId - The user ID
+ * @param oldFolderId - The previous folder ID (null for root)
+ * @param newFolderId - The new folder ID (null for root)
+ */
+export async function invalidateNoteCountsForMove(
+  userId: string,
+  oldFolderId: string | null,
+  newFolderId: string | null
+): Promise<void> {
+  // Invalidate old folder hierarchy
+  await invalidateNoteCounts(userId, oldFolderId);
+
+  // Invalidate new folder hierarchy (if different from old)
+  if (oldFolderId !== newFolderId) {
+    await invalidateNoteCounts(userId, newFolderId);
   }
 }

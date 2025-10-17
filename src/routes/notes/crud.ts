@@ -12,6 +12,7 @@ import {
   notesQueryParamsSchema,
   noteIdParamSchema,
 } from "../../lib/openapi-schemas";
+import { invalidateNoteCounts, invalidateNoteCountsForMove } from "../../lib/cache";
 
 const crudRouter = new OpenAPIHono();
 
@@ -267,6 +268,9 @@ const createNoteHandler: RouteHandler<typeof createNoteRoute> = async (c) => {
     })
     .returning();
 
+  // Invalidate counts cache for the user and all ancestor folders
+  await invalidateNoteCounts(userId, validatedData.folderId ?? null);
+
   return c.json(newNote, 201);
 };
 
@@ -382,6 +386,18 @@ crudRouter.openapi(updateNoteRoute, async (c) => {
     .where(eq(notes.id, noteId))
     .returning();
 
+  // Invalidate counts cache - check if note moved between folders
+  const oldFolderId = existingNote.folderId;
+  const newFolderId = "folderId" in validatedData ? (validatedData.folderId ?? null) : oldFolderId;
+
+  if (oldFolderId !== newFolderId) {
+    // Note moved between folders - invalidate both hierarchies
+    await invalidateNoteCountsForMove(userId, oldFolderId, newFolderId);
+  } else {
+    // Note stayed in same folder - just invalidate current hierarchy
+    await invalidateNoteCounts(userId, oldFolderId);
+  }
+
   return c.json(updatedNote, 200);
 });
 
@@ -435,6 +451,9 @@ crudRouter.openapi(deleteNoteRoute, async (c) => {
     })
     .where(eq(notes.id, noteId))
     .returning();
+
+  // Invalidate counts cache for the note's folder hierarchy
+  await invalidateNoteCounts(userId, existingNote.folderId);
 
   return c.json(deletedNote, 200);
 });

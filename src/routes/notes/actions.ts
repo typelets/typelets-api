@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { db, notes } from "../../db";
 import { eq, and } from "drizzle-orm";
 import { noteSchema, noteIdParamSchema } from "../../lib/openapi-schemas";
+import { invalidateNoteCounts } from "../../lib/cache";
 
 const actionsRouter = new OpenAPIHono();
 
@@ -55,6 +56,9 @@ actionsRouter.openapi(starNoteRoute, async (c) => {
     })
     .where(eq(notes.id, noteId))
     .returning();
+
+  // Invalidate counts cache for the note's folder hierarchy
+  await invalidateNoteCounts(userId, existingNote.folderId);
 
   return c.json(updatedNote, 200);
 });
@@ -109,6 +113,9 @@ actionsRouter.openapi(restoreNoteRoute, async (c) => {
     })
     .where(eq(notes.id, noteId))
     .returning();
+
+  // Invalidate counts cache for the note's folder hierarchy
+  await invalidateNoteCounts(userId, existingNote.folderId);
 
   return c.json(restoredNote, 200);
 });
@@ -171,6 +178,9 @@ actionsRouter.openapi(hideNoteRoute, async (c) => {
     .where(eq(notes.id, noteId))
     .returning();
 
+  // Invalidate counts cache for the note's folder hierarchy
+  await invalidateNoteCounts(userId, existingNote.folderId);
+
   return c.json(hiddenNote, 200);
 });
 
@@ -231,6 +241,9 @@ actionsRouter.openapi(unhideNoteRoute, async (c) => {
     })
     .where(eq(notes.id, noteId))
     .returning();
+
+  // Invalidate counts cache for the note's folder hierarchy
+  await invalidateNoteCounts(userId, existingNote.folderId);
 
   return c.json(unhiddenNote, 200);
 });

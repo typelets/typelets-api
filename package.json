@@ -1,6 +1,6 @@
 {
   "name": "typelets-api",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "A secure, encrypted notes management API with folder organization and file attachments",
   "main": "dist/server.js",
   "license": "MIT",

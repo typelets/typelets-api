@@ -1,10 +1,10 @@
-## [1.8.1](https://github.com/typelets/typelets-api/compare/v1.8.0...v1.8.1) (2025-10-16)
+## [1.8.2](https://github.com/typelets/typelets-api/compare/v1.8.1...v1.8.2) (2025-10-17)
 
 ### Bug Fixes
 
 - resolve Redis Cluster CROSSSLOT error in cache deletions ([862d796](https://github.com/typelets/typelets-api/commit/862d796a684a45f7ca76affe8480633d8dc6220a))
 
-# [1.8.0](https://github.com/typelets/typelets-api/compare/v1.7.2...v1.8.0) (2025-10-16)
+## [1.8.1](https://github.com/typelets/typelets-api/compare/v1.8.0...v1.8.1) (2025-10-16)
 
 ### Features
 
