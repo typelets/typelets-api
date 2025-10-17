@@ -22,7 +22,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - ⚡ **Fast & Type-Safe** with TypeScript and Hono
 - 🐘 **PostgreSQL** with Drizzle ORM
 - 🚀 **Valkey/Redis Caching** for high-performance data access with cluster support
-- 📊 **New Relic APM** integration for monitoring, metrics, and error tracking
+- 📊 **Prometheus Metrics** with Grafana integration for monitoring and observability
 - 💻 **Code Execution** via secure Judge0 API proxy
 - 🛡️ **Comprehensive Rate Limiting** for HTTP, WebSocket, file uploads, and code execution
 - 🏥 **Health Checks** with detailed system status and readiness probes
@@ -36,8 +36,8 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - **Cache**: Valkey/Redis Cluster for high-performance caching
 - **Authentication**: [Clerk](https://clerk.com/)
 - **Validation**: [Zod](https://zod.dev/)
-- **Monitoring**: [New Relic APM](https://newrelic.com/) for metrics, logging, and error tracking
-- **Logging**: Structured JSON logging with automatic New Relic integration
+- **Monitoring**: [Prometheus](https://prometheus.io/) metrics with [Grafana](https://grafana.com/) for observability
+- **Logging**: Structured JSON logging with Prometheus metrics integration
 - **TypeScript**: Strict mode enabled for type safety
 
 ## Prerequisites
@@ -47,7 +47,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - PostgreSQL database (local installation or Docker)
 - Clerk account for authentication ([sign up here](https://dashboard.clerk.com))
 - Valkey/Redis cluster for caching (optional - improves performance)
-- New Relic account for monitoring (optional - [sign up here](https://newrelic.com/signup))
+- Grafana workspace for monitoring (optional - AWS Managed Grafana or self-hosted)
 - Judge0 API key for code execution (optional - [get from RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce))
 
 ## Local Development Setup
@@ -176,7 +176,7 @@ If you prefer to install PostgreSQL locally instead of Docker:
 
 - `GET /` - API information and health status
 - `GET /health` - Enhanced health check with system status
-- `GET /metrics` - System metrics for monitoring dashboards
+- `GET /metrics` - Prometheus metrics endpoint for Grafana (requires Basic Auth)
 - `GET /ready` - Readiness probe for container orchestration
 - `GET /live` - Liveness probe for container orchestration
 - `GET /websocket/status` - WebSocket server status and statistics
@@ -286,9 +286,7 @@ The application uses the following main tables:
 | `VALKEY_HOST`                  | Valkey/Redis cluster hostname                    | No       | -                                |
 | `VALKEY_PORT`                  | Valkey/Redis cluster port                        | No       | 6379                             |
 | **Monitoring (Optional)**      |                                                  |          |                                  |
-| `NEW_RELIC_APP_NAME`           | Application name in New Relic                    | No       | Typelets API                     |
-| `NEW_RELIC_LICENSE_KEY`        | New Relic license key                            | No       | -                                |
-| `NEW_RELIC_LOG_LEVEL`          | New Relic log level (error/warn/info/debug)      | No       | warn (dev), info (prod)          |
+| `METRICS_API_KEY`              | API key for Prometheus metrics endpoint          | No       | -                                |
 | **Rate Limiting**              |                                                  |          |                                  |
 | `HTTP_RATE_LIMIT_WINDOW_MS`    | HTTP rate limit window in milliseconds           | No       | 900000 (15 min)                  |
 | `HTTP_RATE_LIMIT_MAX_REQUESTS` | Max HTTP requests per window                     | No       | 1000                             |
@@ -311,6 +309,49 @@ The application uses the following main tables:
 
 \*Required only for code execution features
 
+## Monitoring with Prometheus & Grafana
+
+The API exposes Prometheus metrics at the `/metrics` endpoint for monitoring with Grafana or other Prometheus-compatible systems.
+
+### Available Metrics
+
+- **HTTP Metrics**: Request counts, duration histograms, status codes
+- **WebSocket Metrics**: Active connections, message counts by type and direction
+- **Database Metrics**: Query counts and duration by operation and table
+- **Cache Metrics**: Operations, hit/miss rates, operation duration
+- **Code Execution Metrics**: Execution duration and success rates by language
+- **Business Events**: Custom event tracking
+- **Security Events**: Security-related event tracking
+- **System Metrics**: Memory, CPU, event loop, and other Node.js metrics
+
+### Grafana Configuration
+
+To connect Grafana to the metrics endpoint:
+
+1. **Generate a secure API key**: `openssl rand -hex 32`
+2. **Set `METRICS_API_KEY` in your environment** (ECS task definition or `.env`)
+3. **Add Prometheus data source in Grafana**:
+   - **Type**: Prometheus
+   - **URL**: `https://api.typelets.com/metrics` (or your API URL)
+   - **Auth**: Basic auth
+   - **User**: `metrics` (or any username)
+   - **Password**: Your `METRICS_API_KEY` value
+
+### Local Testing
+
+Test the metrics endpoint locally:
+
+```bash
+# Set your API key in .env
+METRICS_API_KEY=your-secure-key-here
+
+# Start the server
+pnpm run dev
+
+# Test with curl (Basic Auth)
+curl -u metrics:your-secure-key-here http://localhost:3000/metrics
+```
+
 ## Development
 
 ### Project Structure
@@ -323,7 +364,8 @@ src/
 ├── lib/
 │   ├── cache.ts        # Valkey/Redis cluster caching layer
 │   ├── cache-keys.ts   # Centralized cache key patterns and TTL values
-│   ├── logger.ts       # Structured logging with New Relic integration
+│   ├── logger.ts       # Structured logging with Prometheus metrics integration
+│   ├── prometheus.ts   # Prometheus metrics definitions and registry
 │   └── validation.ts   # Zod validation schemas
 ├── middleware/
 │   ├── auth.ts         # Authentication middleware
@@ -351,7 +393,7 @@ src/
 │   │   └── rate-limiter.ts        # WebSocket rate limiting
 │   ├── types.ts        # WebSocket message types
 │   └── index.ts        # Main WebSocket server manager
-└── server.ts           # Application entry point with New Relic initialization
+└── server.ts           # Application entry point
 ```
 
 ### Type Safety
