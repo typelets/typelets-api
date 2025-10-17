@@ -4,7 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { db, folders, notes } from "../../db";
 import { createFolderSchema, updateFolderSchema, foldersQuerySchema } from "../../lib/validation";
 import { eq, and, desc, count, asc, isNull } from "drizzle-orm";
-import { getCache, setCache, deleteCache } from "../../lib/cache";
+import { getCache, setCache, deleteCache, invalidateNoteCounts } from "../../lib/cache";
 import { CacheKeys, CacheTTL } from "../../lib/cache-keys";
 import { logger } from "../../lib/logger";
 
@@ -140,8 +140,12 @@ crudRouter.post("/", zValidator("json", createFolderSchema), async (c) => {
     })
     .returning();
 
-  // Invalidate cache
+  // Invalidate folder list cache
   await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));
+
+  // Invalidate note counts cache for parent folder (or global if root-level)
+  // This ensures the counts endpoint reflects the new folder structure
+  await invalidateNoteCounts(userId, data.parentId || null);
 
   return c.json(newFolder, 201);
 });
@@ -188,8 +192,23 @@ crudRouter.put("/:id", zValidator("json", updateFolderSchema), async (c) => {
     .where(eq(folders.id, folderId))
     .returning();
 
-  // Invalidate cache
+  // Invalidate folder list cache
   await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));
+
+  // Invalidate note counts cache if folder moved between parents
+  const oldParentId = existingFolder.parentId;
+  const newParentId = "parentId" in data ? data.parentId || null : oldParentId;
+
+  if (oldParentId !== newParentId) {
+    // Folder moved - invalidate both old and new parent counts
+    await invalidateNoteCounts(userId, oldParentId);
+    if (newParentId !== oldParentId) {
+      await invalidateNoteCounts(userId, newParentId);
+    }
+  } else {
+    // Folder properties changed but didn't move - invalidate current parent
+    await invalidateNoteCounts(userId, oldParentId);
+  }
 
   return c.json(updatedFolder);
 });
@@ -256,8 +275,11 @@ crudRouter.delete("/:id", async (c) => {
       }
     });
 
-    // Invalidate cache
+    // Invalidate folder list cache
     await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));
+
+    // Invalidate note counts cache for parent folder (or global if root-level)
+    await invalidateNoteCounts(userId, existingFolder.parentId);
 
     return c.json({ message: "Folder deleted successfully" });
   } catch (error) {
