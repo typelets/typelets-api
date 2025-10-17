@@ -1,3 +1,10 @@
+## [1.8.2](https://github.com/typelets/typelets-api/compare/v1.8.1...v1.8.2) (2025-10-17)
+
+
+### Bug Fixes
+
+* invalidate note counts cache on note and folder mutations ([9c497bb](https://github.com/typelets/typelets-api/commit/9c497bb61338b36f85dc4f1bf66addeabe202fa8))
+
 ## [1.8.1](https://github.com/typelets/typelets-api/compare/v1.8.0...v1.8.1) (2025-10-16)
 
 ### Bug Fixes
