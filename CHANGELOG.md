@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/typelets/typelets-api/compare/v1.8.2...v1.9.0) (2025-10-17)
+
+
+### Features
+
+* migrate from New Relic to Prometheus/Grafana metrics ([236b1c4](https://github.com/typelets/typelets-api/commit/236b1c49e36809caeefbbc376f640b4ea1569e27))
+
 ## [1.8.2](https://github.com/typelets/typelets-api/compare/v1.8.1...v1.8.2) (2025-10-17)
 
 ### Bug Fixes
