@@ -30,19 +30,9 @@ import codeRouter from "./routes/code/crud";
 import { VERSION } from "./version";
 import { logger } from "./lib/logger";
 
-// Type for OpenAPI routers
-interface OpenAPIRouter {
-  getOpenAPIDocument: (config?: Record<string, unknown>) => {
-    openapi?: string;
-    info?: Record<string, unknown>;
-    servers?: Array<Record<string, unknown>>;
-    paths: Record<string, unknown>;
-    components?: {
-      schemas?: Record<string, unknown>;
-      securitySchemes?: Record<string, unknown>;
-    };
-  };
-}
+// Type for OpenAPI routers - using permissive any to avoid type conflicts with library internals
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type OpenAPIRouter = any;
 
 const maxFileSize = process.env.MAX_FILE_SIZE_MB ? parseInt(process.env.MAX_FILE_SIZE_MB) : 50;
 const maxBodySize = Math.ceil(maxFileSize * 1.35);
@@ -70,9 +60,16 @@ app.use("*", async (c, next) => {
   const duration = Date.now() - start;
   const status = c.res.status;
 
+  // Skip logging for health check and monitoring endpoints
+  const skipLogging = ["/health", "/", "/websocket/status", "/docs", "/api/openapi.json"].includes(
+    path
+  );
+
   // Log HTTP request with structured logging
-  const userId = c.get("userId");
-  logger.httpRequest(method, path, status, duration, userId);
+  if (!skipLogging) {
+    const userId = c.get("userId");
+    logger.httpRequest(method, path, status, duration, userId);
+  }
 
   if (isDevelopment) {
     const emoji =

@@ -144,7 +144,9 @@ export class NoteHandler extends BaseResourceHandler {
         });
 
         if (Object.keys(filteredChanges).length > 0) {
-          console.log(`Note update: applying changes to note ${message.noteId}:`, filteredChanges);
+          console.log(
+            `Note update: applying changes to note ${message.noteId}, fields: ${Object.keys(filteredChanges).join(", ")}`
+          );
           filteredChanges.updatedAt = new Date();
 
           const [updatedNote] = await db
@@ -183,8 +185,7 @@ export class NoteHandler extends BaseResourceHandler {
           );
         } else {
           console.warn(
-            `Note update: no valid changes found for note ${message.noteId}, original changes:`,
-            message.changes
+            `Note update: no valid changes found for note ${message.noteId}, attempted fields: ${Object.keys(message.changes || {}).join(", ")}`
           );
           ws.send(
             JSON.stringify({
