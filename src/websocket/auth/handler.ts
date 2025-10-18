@@ -2,6 +2,7 @@ import { verifyToken } from "@clerk/backend";
 import { createHash, createHmac } from "crypto";
 import { AuthenticatedWebSocket, WebSocketMessage, WebSocketConfig } from "../types";
 import { ConnectionManager } from "../middleware/connection-manager";
+import { logger } from "../../lib/logger";
 
 interface AuthenticatedMessage {
   payload: WebSocketMessage;
@@ -41,7 +42,10 @@ export class AuthHandler {
 
     // Emergency cleanup if too many nonces (DoS protection)
     if (this.usedNonces.size > this.MAX_NONCES) {
-      console.warn(`Nonce storage exceeded limit (${this.MAX_NONCES}), clearing all nonces`);
+      logger.warn("Nonce storage exceeded limit, clearing all nonces", {
+        type: "websocket_security",
+        maxNonces: this.MAX_NONCES,
+      });
       this.usedNonces.clear();
     }
   }
@@ -124,8 +128,11 @@ export class AuthHandler {
         console.log(`User ${ws.userId} authenticated via WebSocket`);
       }
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("WebSocket authentication failed", { error: errorMessage });
+      logger.error(
+        "WebSocket authentication failed",
+        { type: "websocket_auth_error" },
+        error instanceof Error ? error : new Error(String(error))
+      );
 
       const isTokenExpired = (error as Record<string, unknown>)?.reason === "token-expired";
 
@@ -161,21 +168,29 @@ export class AuthHandler {
     const MAX_MESSAGE_AGE = 5 * 60 * 1000; // 5 minutes
     if (messageAge > MAX_MESSAGE_AGE || messageAge < -60000) {
       // -60 seconds tolerance for clock skew
-      console.warn("Message rejected: timestamp out of range");
+      logger.warn("Message rejected: timestamp out of range", {
+        type: "websocket_security",
+        messageAge,
+        maxAge: MAX_MESSAGE_AGE,
+      });
       return false;
     }
 
     // 2. Check for replay attack using nonce
     const nonceKey = `${nonce}:${timestamp}`;
     if (this.usedNonces.has(nonceKey)) {
-      console.warn("Message rejected: nonce already used (replay attack)");
+      logger.warn("Message rejected: nonce already used (replay attack)", {
+        type: "websocket_security",
+      });
       return false;
     }
 
     try {
       // 3. Validate required parameters
       if (!jwtToken || !userId) {
-        console.error("Missing JWT token or user ID for signature verification");
+        logger.warn("Missing JWT token or user ID for signature verification", {
+          type: "websocket_security",
+        });
         return false;
       }
 
@@ -207,9 +222,10 @@ export class AuthHandler {
       const isValid = isValidRegenerated || isValidStored;
 
       if (!isValid) {
-        console.warn("Message signature verification failed for user", userId);
-      } else {
-        console.debug("Message signature verified successfully for user", userId);
+        logger.warn("Message signature verification failed", {
+          type: "websocket_security",
+          userId: userId || "unknown",
+        });
       }
 
       if (isValid) {
@@ -219,8 +235,11 @@ export class AuthHandler {
 
       return isValid;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("Error verifying message signature", { error: errorMessage });
+      logger.error(
+        "Error verifying message signature",
+        { type: "websocket_auth_error" },
+        error instanceof Error ? error : new Error(String(error))
+      );
       return false;
     }
   }
@@ -239,7 +258,9 @@ export class AuthHandler {
     if (this.isAuthenticatedMessage(rawMessage)) {
       // This is an authenticated message, verify signature
       if (!ws.sessionSecret) {
-        console.warn("Authenticated message received but no session secret available");
+        logger.warn("Authenticated message received but no session secret available", {
+          type: "websocket_security",
+        });
         return null;
       }
 
@@ -250,7 +271,10 @@ export class AuthHandler {
         ws.userId
       );
       if (!isValid) {
-        console.warn("Message signature verification failed for user", ws.userId);
+        logger.warn("Message signature verification failed", {
+          type: "websocket_security",
+          userId: ws.userId || "unknown",
+        });
         return null;
       }
 

@@ -1,3 +1,5 @@
+import * as Sentry from "@sentry/node";
+
 interface LogLevel {
   level: string;
   priority: number;
@@ -33,48 +35,69 @@ class Logger {
     return level.priority <= this.currentLogLevel.priority;
   }
 
-  private formatLog(
-    level: string,
+  private sendToSentry(
+    level: "error" | "warning" | "info" | "debug",
     message: string,
     meta: LogMetadata = {}
-  ): Record<string, unknown> {
-    return {
-      timestamp: new Date().toISOString(),
+  ): void {
+    // Send as breadcrumb for proper field extraction in Sentry
+    Sentry.addBreadcrumb({
       level,
-      service: this.service,
-      environment: this.environment,
-      version: this.version,
       message,
-      ...meta,
-    };
+      category: (meta.type as string) || "app",
+      data: {
+        service: this.service,
+        environment: this.environment,
+        version: this.version,
+        ...meta,
+      },
+    });
   }
 
   error(message: string, meta: LogMetadata = {}, error?: Error): void {
     if (this.shouldLog(LOG_LEVELS.error)) {
-      const logData = this.formatLog("error", message, meta);
+      const enrichedMeta = { ...meta };
       if (error) {
-        logData.errorMessage = error.message;
-        logData.errorStack = error.stack;
+        enrichedMeta.errorMessage = error.message;
+        enrichedMeta.errorStack = error.stack || "";
       }
-      console.error(message, logData);
+
+      this.sendToSentry("error", message, enrichedMeta);
+
+      // Also send to console for CloudWatch
+      if (this.environment === "development") {
+        console.error(message, enrichedMeta);
+      }
     }
   }
 
   warn(message: string, meta: LogMetadata = {}): void {
     if (this.shouldLog(LOG_LEVELS.warn)) {
-      console.warn(message, this.formatLog("warn", message, meta));
+      this.sendToSentry("warning", message, meta);
+
+      if (this.environment === "development") {
+        console.warn(message, meta);
+      }
     }
   }
 
   info(message: string, meta: LogMetadata = {}): void {
     if (this.shouldLog(LOG_LEVELS.info)) {
-      console.log(message, this.formatLog("info", message, meta));
+      this.sendToSentry("info", message, meta);
+
+      if (this.environment === "development") {
+        console.log(message, meta);
+      }
     }
   }
 
   debug(message: string, meta: LogMetadata = {}): void {
     if (this.shouldLog(LOG_LEVELS.debug)) {
-      console.log(message, this.formatLog("debug", message, meta));
+      this.sendToSentry("debug", message, meta);
+
+      if (this.environment === "development") {
+        console.log(message, meta);
+      }
     }
   }
 

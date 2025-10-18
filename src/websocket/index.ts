@@ -78,9 +78,11 @@ export class WebSocketManager {
                 message: "Message too large. Maximum size is 1MB.",
               })
             );
-            console.warn(
-              `WebSocket message too large: ${data.length} bytes from user ${ws.userId || "unauthenticated"}`
-            );
+            logger.warn("WebSocket message too large", {
+              type: "websocket_security",
+              messageSize: data.length,
+              userId: ws.userId || "unauthenticated",
+            });
             return;
           }
 
@@ -129,11 +131,14 @@ export class WebSocketManager {
             );
           }
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          console.error("Error handling WebSocket message", {
-            messageType: rawMessage?.type || "unknown",
-            error: errorMessage,
-          });
+          logger.error(
+            "Error handling WebSocket message",
+            {
+              type: "websocket_error",
+              messageType: rawMessage?.type || "unknown",
+            },
+            error instanceof Error ? error : new Error(String(error))
+          );
 
           // WebSocket metrics WebSocket message errors
           // Error tracking available via console logs
@@ -166,7 +171,7 @@ export class WebSocketManager {
       });
 
       ws.on("error", (error: Error): void => {
-        console.error("WebSocket error", { error: error.message });
+        logger.error("WebSocket error", { type: "websocket_connection_error" }, error);
 
         // Send WebSocket connection errors to New Relic
         // WebSocket metrics WebSocket connection errors

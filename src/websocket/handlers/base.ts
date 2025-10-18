@@ -67,12 +67,15 @@ export class BaseResourceHandler {
           return;
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`Error authorizing ${config.resourceType} ${config.operation}`, {
-          resourceType: config.resourceType,
-          operation: config.operation,
-          error: errorMessage,
-        });
+        logger.error(
+          `Error authorizing ${config.resourceType} ${config.operation}`,
+          {
+            type: "websocket_error",
+            resourceType: config.resourceType,
+            operation: config.operation,
+          },
+          error instanceof Error ? error : new Error(String(error))
+        );
         ws.send(
           JSON.stringify({
             type: "error",

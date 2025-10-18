@@ -11,10 +11,11 @@ if (process.env.SENTRY_DSN) {
 
     integrations: [
       nodeProfilingIntegration(),
-      // Send console.log, console.warn, and console.error calls as logs to Sentry
-      Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
       // Automatic PostgreSQL query monitoring and performance tracking
       Sentry.postgresIntegration(),
+      // Only capture unexpected console.error (logger uses breadcrumbs for structured logging)
+      // This catches errors from third-party libraries or unexpected crashes
+      Sentry.captureConsoleIntegration({ levels: ["error"] }),
     ],
 
     // Send structured logs to Sentry

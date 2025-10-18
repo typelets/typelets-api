@@ -54,8 +54,11 @@ export class NoteHandler extends BaseResourceHandler {
         })
       );
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("Error joining note", { noteId: message.noteId, error: errorMessage });
+      logger.error(
+        "Error joining note",
+        { type: "websocket_error", noteId: message.noteId || "unknown" },
+        error instanceof Error ? error : new Error(String(error))
+      );
       ws.send(
         JSON.stringify({
           type: "error",
@@ -137,17 +140,21 @@ export class NoteHandler extends BaseResourceHandler {
               typeof value === "string" &&
               value !== "[ENCRYPTED]"
             ) {
-              console.warn(
-                `Note update: rejected plaintext ${key} for note ${message.noteId} - must be [ENCRYPTED]`
-              );
+              logger.warn("Note update: rejected plaintext field - must be [ENCRYPTED]", {
+                type: "security",
+                field: key,
+                noteId: message.noteId || "unknown",
+              });
               return;
             }
 
             filteredChanges[key] = value;
           } else {
-            console.warn(
-              `Note update: filtered out disallowed field '${key}' for note ${message.noteId}`
-            );
+            logger.warn("Note update: filtered out disallowed field", {
+              type: "security",
+              field: key,
+              noteId: message.noteId || "unknown",
+            });
           }
         });
 
@@ -209,9 +216,11 @@ export class NoteHandler extends BaseResourceHandler {
             })
           );
         } else {
-          console.warn(
-            `Note update: no valid changes found for note ${message.noteId}, attempted fields: ${Object.keys(message.changes || {}).join(", ")}`
-          );
+          logger.warn("Note update: no valid changes found", {
+            type: "validation",
+            noteId: message.noteId || "unknown",
+            attemptedFields: Object.keys(message.changes || {}).join(", "),
+          });
           ws.send(
             JSON.stringify({
               type: "error",
@@ -221,8 +230,11 @@ export class NoteHandler extends BaseResourceHandler {
         }
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("Error handling note update", { noteId: message.noteId, error: errorMessage });
+      logger.error(
+        "Error handling note update",
+        { type: "websocket_error", noteId: message.noteId || "unknown" },
+        error instanceof Error ? error : new Error(String(error))
+      );
       ws.send(
         JSON.stringify({
           type: "error",
