@@ -35,6 +35,8 @@ jobs:
         env:
           NODE_ENV: production
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: NODE_OPTIONS="--max-old-space-size=8192" pnpm run build
 
       - name: Release

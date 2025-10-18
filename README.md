@@ -10,6 +10,43 @@
 
 The backend API for the [Typelets Application](https://github.com/typelets/typelets-app) - a secure, encrypted notes management system built with TypeScript, Hono, and PostgreSQL. Features end-to-end encryption support, file attachments, and folder organization.
 
+## Table of Contents
+
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Prerequisites](#prerequisites)
+- [Local Development Setup](#local-development-setup)
+  - [Quick Start](#quick-start)
+  - [Development Workflow](#development-workflow)
+- [Alternative Installation Methods](#alternative-installation-methods)
+- [Available Scripts](#available-scripts)
+- [API Endpoints](#api-endpoints)
+  - [Public Endpoints](#public-endpoints)
+  - [Authentication](#authentication)
+  - [Interactive Documentation](#interactive-documentation)
+  - [WebSocket Real-time Sync](#websocket-real-time-sync)
+- [Database Schema](#database-schema)
+- [Security Features](#security-features)
+- [Environment Variables](#environment-variables)
+- [Monitoring with Sentry.io](#monitoring-with-sentryio)
+  - [Features](#features-1)
+  - [Configuration](#configuration)
+  - [Source Maps](#source-maps)
+  - [Automated Release Tracking](#automated-release-tracking)
+- [Development](#development)
+  - [Project Structure](#project-structure)
+  - [Type Safety](#type-safety)
+- [Docker Support](#docker-support)
+- [Production Deployment](#production-deployment)
+- [Contributing](#contributing)
+  - [Getting Started](#getting-started)
+  - [Commit Message Format](#commit-message-format)
+  - [Pull Request Process](#pull-request-process)
+  - [Reporting Issues](#reporting-issues)
+  - [Security Vulnerabilities](#security-vulnerabilities)
+- [License](#license)
+- [Acknowledgments](#acknowledgments)
+
 ## Features
 
 - 🔐 **Secure Authentication** via Clerk
@@ -110,12 +147,6 @@ pnpm run dev
 **WebSocket connection available at: `ws://localhost:3000`**
 
 The development server will automatically restart when you make changes to any TypeScript files.
-
-### Why This Setup?
-
-✅ **PostgreSQL in Docker**: Easy to start/stop, no local PostgreSQL installation needed  
-✅ **API with pnpm**: Hot reload, easy debugging, faster development cycle  
-✅ **Clean separation**: Matches production architecture (API + external database)
 
 ### Development Workflow
 
@@ -308,8 +339,6 @@ Sentry is configured in the application with:
 ```env
 SENTRY_DSN=https://your-key@your-org-id.ingest.us.sentry.io/your-project-id
 ```
-
-Get your DSN from: [Sentry.io Project Settings](https://sentry.io/settings/bata-labs/projects/typelets-api/keys/)
 
 Once configured, all errors are automatically captured and sent to Sentry with contextual information including:
 

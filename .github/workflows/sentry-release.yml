@@ -23,8 +23,8 @@ jobs:
       - name: Create Sentry Release
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          SENTRY_ORG: bata-labs
-          SENTRY_PROJECT: typelets-api
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
         run: |
           # Create new release
           sentry-cli releases new "${{ env.RELEASE_VERSION }}"

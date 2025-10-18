@@ -20,8 +20,8 @@ const buildOptions = {
 if (isProduction && process.env.SENTRY_AUTH_TOKEN) {
   buildOptions.plugins = [
     sentryEsbuildPlugin({
-      org: "bata-labs",
-      project: "typelets-api",
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,
 
       // Upload source maps to Sentry
