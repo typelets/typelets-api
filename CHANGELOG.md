@@ -1,3 +1,10 @@
+## [1.11.3](https://github.com/typelets/typelets-api/compare/v1.11.2...v1.11.3) (2025-10-18)
+
+
+### Bug Fixes
+
+* use Sentry breadcrumbs for proper structured logging field extraction ([f26f3e6](https://github.com/typelets/typelets-api/commit/f26f3e6249b19f91cd52fe39b53a7fcd215ec1a8))
+
 ## [1.11.2](https://github.com/typelets/typelets-api/compare/v1.11.1...v1.11.2) (2025-10-18)
 
 ### Bug Fixes
