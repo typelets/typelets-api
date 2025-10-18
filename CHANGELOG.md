@@ -1,3 +1,10 @@
+## [1.11.5](https://github.com/typelets/typelets-api/compare/v1.11.4...v1.11.5) (2025-10-18)
+
+
+### Bug Fixes
+
+* send logs as Sentry events using captureMessage/captureException ([422a23c](https://github.com/typelets/typelets-api/commit/422a23cb02b80084a79f7f81f9d60121ec76a5a7))
+
 ## [1.11.4](https://github.com/typelets/typelets-api/compare/v1.11.3...v1.11.4) (2025-10-18)
 
 ### Bug Fixes
