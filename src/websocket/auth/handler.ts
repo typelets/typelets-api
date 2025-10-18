@@ -124,7 +124,8 @@ export class AuthHandler {
         console.log(`User ${ws.userId} authenticated via WebSocket`);
       }
     } catch (error: unknown) {
-      console.error("WebSocket authentication failed:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("WebSocket authentication failed", { error: errorMessage });
 
       const isTokenExpired = (error as Record<string, unknown>)?.reason === "token-expired";
 
@@ -218,7 +219,8 @@ export class AuthHandler {
 
       return isValid;
     } catch (error) {
-      console.error("Error verifying message signature:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Error verifying message signature", { error: errorMessage });
       return false;
     }
   }

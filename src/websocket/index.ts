@@ -11,6 +11,7 @@ import { ConnectionManager } from "./middleware/connection-manager";
 import { AuthHandler } from "./auth/handler";
 import { NoteHandler } from "./handlers/notes";
 import { FolderHandler } from "./handlers/folders";
+import { logger } from "../lib/logger";
 
 export class WebSocketManager {
   private wss: WebSocketServer;
@@ -48,12 +49,19 @@ export class WebSocketManager {
   private setupWebSocketServer(): void {
     this.wss.on("connection", (ws: AuthenticatedWebSocket) => {
       const connectionStart = Date.now();
-      if (process.env.NODE_ENV === "development") {
-        console.log("New WebSocket connection established");
-      }
-
       // Add connection start time for duration tracking
       ws.connectionStart = connectionStart;
+
+      if (process.env.NODE_ENV === "development") {
+        logger.websocketEvent(
+          "connection",
+          "anonymous",
+          undefined,
+          undefined,
+          undefined,
+          "established"
+        );
+      }
 
       // Set authentication timeout
       this.authHandler.setupAuthTimeout(ws);
@@ -109,13 +117,23 @@ export class WebSocketManager {
 
           const messageDuration = Date.now() - messageStart;
 
-          // Log WebSocket performance
-          const emoji = messageDuration > 2000 ? "🐌" : messageDuration > 1000 ? "⚠️" : "⚡";
+          // Log WebSocket performance in development
           if (process.env.NODE_ENV === "development") {
-            console.log(`${emoji} WS: ${message.type} (${messageDuration}ms)`);
+            logger.websocketEvent(
+              message.type,
+              ws.userId || "anonymous",
+              messageDuration,
+              undefined,
+              undefined,
+              messageDuration > 2000 ? "slow" : messageDuration > 1000 ? "medium" : "fast"
+            );
           }
         } catch (error) {
-          console.error("Error handling WebSocket message:", error);
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          console.error("Error handling WebSocket message", {
+            messageType: rawMessage?.type || "unknown",
+            error: errorMessage,
+          });
 
           // WebSocket metrics WebSocket message errors
           // Error tracking available via console logs
@@ -134,8 +152,13 @@ export class WebSocketManager {
         const connectionDuration = Date.now() - (ws.connectionStart || Date.now());
 
         if (process.env.NODE_ENV === "development") {
-          console.log(
-            `🔌 WebSocket disconnected (${Math.round(connectionDuration / 1000)}s session)`
+          logger.websocketEvent(
+            "disconnection",
+            ws.userId || "anonymous",
+            connectionDuration,
+            undefined,
+            undefined,
+            "closed"
           );
         }
 
@@ -143,7 +166,7 @@ export class WebSocketManager {
       });
 
       ws.on("error", (error: Error): void => {
-        console.error("WebSocket error:", error);
+        console.error("WebSocket error", { error: error.message });
 
         // Send WebSocket connection errors to New Relic
         // WebSocket metrics WebSocket connection errors
@@ -234,10 +257,6 @@ export class WebSocketManager {
 
   private handleDisconnection(ws: AuthenticatedWebSocket): void {
     this.connectionManager.cleanupConnection(ws);
-
-    if (ws.userId) {
-      console.log(`User ${ws.userId} disconnected from WebSocket`);
-    }
   }
 
   public getConnectionStats(): ConnectionStats {
@@ -262,9 +281,16 @@ export class WebSocketManager {
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, syncMessage);
 
-    console.log(
-      `Server notified ${sentCount} devices about note ${noteId} update for user ${userId}`
-    );
+    if (process.env.NODE_ENV === "development") {
+      logger.websocketEvent(
+        "note_update_notification",
+        userId,
+        undefined,
+        noteId,
+        "note",
+        `${sentCount}_devices`
+      );
+    }
   }
 
   public notifyNoteCreated(userId: string, noteData: Record<string, unknown>): void {
@@ -277,9 +303,16 @@ export class WebSocketManager {
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, createMessage);
 
-    console.log(
-      `Server notified ${sentCount} devices about new note ${noteData.id} for user ${userId}`
-    );
+    if (process.env.NODE_ENV === "development") {
+      logger.websocketEvent(
+        "note_created_notification",
+        userId,
+        undefined,
+        noteData.id as string,
+        "note",
+        `${sentCount}_devices`
+      );
+    }
   }
 
   public notifyNoteDeleted(userId: string, noteId: string): void {
@@ -292,9 +325,16 @@ export class WebSocketManager {
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, deleteMessage);
 
-    console.log(
-      `Server notified ${sentCount} devices about note ${noteId} deletion for user ${userId}`
-    );
+    if (process.env.NODE_ENV === "development") {
+      logger.websocketEvent(
+        "note_deleted_notification",
+        userId,
+        undefined,
+        noteId,
+        "note",
+        `${sentCount}_devices`
+      );
+    }
   }
 
   public notifyFolderCreated(userId: string, folderData: Record<string, unknown>): void {
@@ -307,9 +347,16 @@ export class WebSocketManager {
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, createMessage);
 
-    console.log(
-      `Server notified ${sentCount} devices about new folder ${folderData.id} for user ${userId}`
-    );
+    if (process.env.NODE_ENV === "development") {
+      logger.websocketEvent(
+        "folder_created_notification",
+        userId,
+        undefined,
+        folderData.id as string,
+        "folder",
+        `${sentCount}_devices`
+      );
+    }
   }
 
   public notifyFolderUpdated(
@@ -329,9 +376,16 @@ export class WebSocketManager {
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, updateMessage);
 
-    console.log(
-      `Server notified ${sentCount} devices about folder ${folderId} update for user ${userId}`
-    );
+    if (process.env.NODE_ENV === "development") {
+      logger.websocketEvent(
+        "folder_updated_notification",
+        userId,
+        undefined,
+        folderId,
+        "folder",
+        `${sentCount}_devices`
+      );
+    }
   }
 
   public notifyFolderDeleted(userId: string, folderId: string): void {
@@ -344,9 +398,16 @@ export class WebSocketManager {
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, deleteMessage);
 
-    console.log(
-      `Server notified ${sentCount} devices about folder ${folderId} deletion for user ${userId}`
-    );
+    if (process.env.NODE_ENV === "development") {
+      logger.websocketEvent(
+        "folder_deleted_notification",
+        userId,
+        undefined,
+        folderId,
+        "folder",
+        `${sentCount}_devices`
+      );
+    }
   }
 }
 

@@ -33,8 +33,12 @@ class Logger {
     return level.priority <= this.currentLogLevel.priority;
   }
 
-  private formatLog(level: string, message: string, meta: LogMetadata = {}): string {
-    const logEntry = {
+  private formatLog(
+    level: string,
+    message: string,
+    meta: LogMetadata = {}
+  ): Record<string, unknown> {
+    return {
       timestamp: new Date().toISOString(),
       level,
       service: this.service,
@@ -43,31 +47,34 @@ class Logger {
       message,
       ...meta,
     };
-
-    return JSON.stringify(logEntry);
   }
 
   error(message: string, meta: LogMetadata = {}, error?: Error): void {
     if (this.shouldLog(LOG_LEVELS.error)) {
-      console.error(this.formatLog("error", message, meta));
+      const logData = this.formatLog("error", message, meta);
+      if (error) {
+        logData.errorMessage = error.message;
+        logData.errorStack = error.stack;
+      }
+      console.error(message, logData);
     }
   }
 
   warn(message: string, meta: LogMetadata = {}): void {
     if (this.shouldLog(LOG_LEVELS.warn)) {
-      console.warn(this.formatLog("warn", message, meta));
+      console.warn(message, this.formatLog("warn", message, meta));
     }
   }
 
   info(message: string, meta: LogMetadata = {}): void {
     if (this.shouldLog(LOG_LEVELS.info)) {
-      console.log(this.formatLog("info", message, meta));
+      console.log(message, this.formatLog("info", message, meta));
     }
   }
 
   debug(message: string, meta: LogMetadata = {}): void {
     if (this.shouldLog(LOG_LEVELS.debug)) {
-      console.log(this.formatLog("debug", message, meta));
+      console.log(message, this.formatLog("debug", message, meta));
     }
   }
 
@@ -89,16 +96,24 @@ class Logger {
     });
   }
 
-  websocketEvent(eventType: string, userId?: string, connectionCount?: number): void {
+  websocketEvent(
+    eventType: string,
+    userId?: string,
+    duration?: number,
+    resourceId?: string,
+    resourceType?: string,
+    status?: string
+  ): void {
     const meta: LogMetadata = {
       type: "websocket_event",
       eventType,
       userId: userId || "anonymous",
     };
 
-    if (connectionCount !== undefined) {
-      meta.connectionCount = connectionCount;
-    }
+    if (duration !== undefined) meta.duration = duration;
+    if (resourceId) meta.resourceId = resourceId;
+    if (resourceType) meta.resourceType = resourceType;
+    if (status) meta.status = status;
 
     this.info("WebSocket event", meta);
   }

@@ -3,6 +3,9 @@ import { eq, and } from "drizzle-orm";
 import { AuthenticatedWebSocket, WebSocketMessage } from "../types";
 import { ConnectionManager } from "../middleware/connection-manager";
 import { BaseResourceHandler } from "./base";
+import { logger } from "../../lib/logger";
+
+const isDevelopment = process.env.NODE_ENV === "development";
 
 export class NoteHandler extends BaseResourceHandler {
   constructor(connectionManager: ConnectionManager) {
@@ -36,10 +39,12 @@ export class NoteHandler extends BaseResourceHandler {
         return;
       }
 
-      console.log(`User ${ws.userId} joined note ${message.noteId}`);
-
       // Track this connection for the specific note
       this._connectionManager.addNoteConnection(message.noteId, ws);
+
+      if (isDevelopment) {
+        logger.websocketEvent("join_note", ws.userId, undefined, message.noteId, "note", "success");
+      }
 
       ws.send(
         JSON.stringify({
@@ -49,7 +54,8 @@ export class NoteHandler extends BaseResourceHandler {
         })
       );
     } catch (error) {
-      console.error("Error joining note:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Error joining note", { noteId: message.noteId, error: errorMessage });
       ws.send(
         JSON.stringify({
           type: "error",
@@ -64,10 +70,12 @@ export class NoteHandler extends BaseResourceHandler {
       return;
     }
 
-    console.log(`User ${ws.userId} left note ${message.noteId}`);
-
     // Remove connection from note tracking
     this._connectionManager.removeNoteConnection(message.noteId, ws);
+
+    if (isDevelopment) {
+      logger.websocketEvent("leave_note", ws.userId, undefined, message.noteId, "note", "success");
+    }
 
     ws.send(
       JSON.stringify({
@@ -144,10 +152,8 @@ export class NoteHandler extends BaseResourceHandler {
         });
 
         if (Object.keys(filteredChanges).length > 0) {
-          console.log(
-            `Note update: applying changes to note ${message.noteId}, fields: ${Object.keys(filteredChanges).join(", ")}`
-          );
           filteredChanges.updatedAt = new Date();
+          const updateStart = Date.now();
 
           const [updatedNote] = await db
             .update(notes)
@@ -155,7 +161,17 @@ export class NoteHandler extends BaseResourceHandler {
             .where(eq(notes.id, message.noteId))
             .returning();
 
-          console.log(`Note ${message.noteId} updated by user ${ws.userId}`);
+          const updateDuration = Date.now() - updateStart;
+          if (isDevelopment) {
+            logger.websocketEvent(
+              "note_update",
+              ws.userId,
+              updateDuration,
+              message.noteId,
+              "note",
+              "success"
+            );
+          }
 
           // Broadcast the successful update to all user devices
           const syncMessage = {
@@ -172,7 +188,16 @@ export class NoteHandler extends BaseResourceHandler {
             syncMessage,
             ws
           );
-          console.log(`Broadcasted message to ${sentCount} devices for user ${ws.userId}`);
+          if (isDevelopment) {
+            logger.websocketEvent(
+              "note_sync_broadcast",
+              ws.userId,
+              undefined,
+              message.noteId,
+              "note",
+              `${sentCount}_devices`
+            );
+          }
 
           // Send confirmation to the originating device
           ws.send(
@@ -196,7 +221,8 @@ export class NoteHandler extends BaseResourceHandler {
         }
       }
     } catch (error) {
-      console.error("Error handling note update:", error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("Error handling note update", { noteId: message.noteId, error: errorMessage });
       ws.send(
         JSON.stringify({
           type: "error",

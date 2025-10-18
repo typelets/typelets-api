@@ -1,9 +1,8 @@
 ## [1.11.1](https://github.com/typelets/typelets-api/compare/v1.11.0...v1.11.1) (2025-10-18)
 
-
 ### Bug Fixes
 
-* reduce log noise and prevent sensitive data logging ([df00e25](https://github.com/typelets/typelets-api/commit/df00e2523f1f04016bc18536858cbd600632f003))
+- reduce log noise and prevent sensitive data logging ([df00e25](https://github.com/typelets/typelets-api/commit/df00e2523f1f04016bc18536858cbd600632f003))
 
 # [1.11.0](https://github.com/typelets/typelets-api/compare/v1.10.0...v1.11.0) (2025-10-18)
 

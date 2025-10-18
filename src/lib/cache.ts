@@ -2,6 +2,7 @@ import { Cluster, ClusterOptions } from "ioredis";
 import { logger } from "./logger";
 import { db, folders } from "../db";
 import { eq } from "drizzle-orm";
+import * as Sentry from "@sentry/node";
 
 let client: Cluster | null = null;
 
@@ -73,71 +74,121 @@ export async function getCache<T>(key: string): Promise<T | null> {
   const cache = getCacheClient();
   if (!cache) return null;
 
-  const startTime = Date.now();
-  try {
-    const data = await cache.get(key);
-    const duration = Date.now() - startTime;
-    const hit = data !== null;
+  return await Sentry.startSpan(
+    {
+      op: "cache.get",
+      name: "cache.get",
+      attributes: {
+        "cache.key": key,
+      },
+    },
+    async (span) => {
+      const startTime = Date.now();
+      try {
+        const data = await cache.get(key);
+        const duration = Date.now() - startTime;
+        const hit = data !== null;
 
-    // Log cache operation with metrics
-    logger.cacheOperation("get", key, hit, duration);
+        // Set Sentry span attributes
+        span.setAttribute("cache.hit", hit);
+        if (data) {
+          span.setAttribute("cache.item_size", data.length);
+        }
 
-    return data ? JSON.parse(data) : null;
-  } catch (error) {
-    logger.cacheError("get", key, error instanceof Error ? error : new Error(String(error)));
-    return null;
-  }
+        // Log cache operation with metrics
+        logger.cacheOperation("get", key, hit, duration);
+
+        return data ? JSON.parse(data) : null;
+      } catch (error) {
+        span.setStatus({ code: 2, message: "error" }); // SPAN_STATUS_ERROR
+        logger.cacheError("get", key, error instanceof Error ? error : new Error(String(error)));
+        return null;
+      }
+    }
+  );
 }
 
 export async function setCache(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
   const cache = getCacheClient();
   if (!cache) return;
 
-  const startTime = Date.now();
-  try {
-    const serialized = JSON.stringify(value);
-    if (ttlSeconds) {
-      await cache.setex(key, ttlSeconds, serialized);
-    } else {
-      await cache.set(key, serialized);
-    }
-    const duration = Date.now() - startTime;
+  await Sentry.startSpan(
+    {
+      op: "cache.put",
+      name: "cache.put",
+      attributes: {
+        "cache.key": key,
+      },
+    },
+    async (span) => {
+      const startTime = Date.now();
+      try {
+        const serialized = JSON.stringify(value);
 
-    // Log cache operation with metrics
-    logger.cacheOperation("set", key, undefined, duration, ttlSeconds);
-  } catch (error) {
-    logger.cacheError("set", key, error instanceof Error ? error : new Error(String(error)));
-  }
+        // Set Sentry span attributes
+        span.setAttribute("cache.item_size", serialized.length);
+        if (ttlSeconds) {
+          span.setAttribute("cache.ttl", ttlSeconds);
+        }
+
+        if (ttlSeconds) {
+          await cache.setex(key, ttlSeconds, serialized);
+        } else {
+          await cache.set(key, serialized);
+        }
+        const duration = Date.now() - startTime;
+
+        // Log cache operation with metrics
+        logger.cacheOperation("set", key, undefined, duration, ttlSeconds);
+      } catch (error) {
+        span.setStatus({ code: 2, message: "error" }); // SPAN_STATUS_ERROR
+        logger.cacheError("set", key, error instanceof Error ? error : new Error(String(error)));
+      }
+    }
+  );
 }
 
 export async function deleteCache(...keys: string[]): Promise<void> {
   const cache = getCacheClient();
   if (!cache || keys.length === 0) return;
 
-  const startTime = Date.now();
-  try {
-    // In cluster mode, keys may hash to different slots
-    // Use pipeline to delete individually (more efficient than separate awaits)
-    if (keys.length === 1) {
-      await cache.del(keys[0]);
-    } else {
-      const pipeline = cache.pipeline();
-      for (const key of keys) {
-        pipeline.del(key);
-      }
-      await pipeline.exec();
-    }
-    const duration = Date.now() - startTime;
+  await Sentry.startSpan(
+    {
+      op: "cache.remove",
+      name: "cache.remove",
+      attributes: {
+        "cache.key": keys[0], // Use first key as representative
+        "cache.key_count": keys.length,
+      },
+    },
+    async (span) => {
+      const startTime = Date.now();
+      try {
+        // In cluster mode, keys may hash to different slots
+        // Use pipeline to delete individually (more efficient than separate awaits)
+        if (keys.length === 1) {
+          await cache.del(keys[0]);
+        } else {
+          const pipeline = cache.pipeline();
+          for (const key of keys) {
+            pipeline.del(key);
+          }
+          await pipeline.exec();
+        }
+        const duration = Date.now() - startTime;
 
-    // Log cache operation with metrics (use first key as representative)
-    logger.cacheOperation("delete", keys[0], undefined, duration, undefined, keys.length);
-  } catch (error) {
-    logger.cacheError(
-      "delete",
-      keys.join(", "),
-      error instanceof Error ? error : new Error(String(error))
-    );
-  }
+        // Log cache operation with metrics (use first key as representative)
+        logger.cacheOperation("delete", keys[0], undefined, duration, undefined, keys.length);
+      } catch (error) {
+        span.setStatus({ code: 2, message: "error" }); // SPAN_STATUS_ERROR
+        logger.cacheError(
+          "delete",
+          keys.join(", "),
+          error instanceof Error ? error : new Error(String(error))
+        );
+      }
+    }
+  );
 }
 
 export async function deleteCachePattern(pattern: string): Promise<void> {
