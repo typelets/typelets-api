@@ -40,31 +40,64 @@ class Logger {
     message: string,
     meta: LogMetadata = {}
   ): void {
-    // Send as breadcrumb for proper field extraction in Sentry
+    const enrichedData = {
+      service: this.service,
+      environment: this.environment,
+      version: this.version,
+      ...meta,
+    };
+
+    // Add breadcrumb for context (appears in transaction/error details)
     Sentry.addBreadcrumb({
       level,
       message,
       category: (meta.type as string) || "app",
-      data: {
-        service: this.service,
-        environment: this.environment,
-        version: this.version,
-        ...meta,
-      },
+      data: enrichedData,
     });
+
+    // Also send as message event so it appears in Sentry Issues
+    // Only send info/warn/error as events (not debug to reduce noise)
+    if (level !== "debug") {
+      Sentry.captureMessage(message, {
+        level,
+        contexts: {
+          metadata: enrichedData,
+        },
+        tags: {
+          type: (meta.type as string) || "app",
+          service: this.service,
+        },
+      });
+    }
   }
 
   error(message: string, meta: LogMetadata = {}, error?: Error): void {
     if (this.shouldLog(LOG_LEVELS.error)) {
       const enrichedMeta = { ...meta };
+
       if (error) {
-        enrichedMeta.errorMessage = error.message;
-        enrichedMeta.errorStack = error.stack || "";
+        // Send exception to Sentry with context
+        Sentry.captureException(error, {
+          contexts: {
+            metadata: {
+              service: this.service,
+              environment: this.environment,
+              version: this.version,
+              message,
+              ...meta,
+            },
+          },
+          tags: {
+            type: (meta.type as string) || "error",
+            service: this.service,
+          },
+        });
+      } else {
+        // No error object, send as error message
+        this.sendToSentry("error", message, enrichedMeta);
       }
 
-      this.sendToSentry("error", message, enrichedMeta);
-
-      // Also send to console for CloudWatch
+      // Also send to console for development debugging
       if (this.environment === "development") {
         console.error(message, enrichedMeta);
       }
