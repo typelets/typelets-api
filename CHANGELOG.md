@@ -1,3 +1,10 @@
+## [1.11.2](https://github.com/typelets/typelets-api/compare/v1.11.1...v1.11.2) (2025-10-18)
+
+
+### Bug Fixes
+
+* standardize logging with structured data and add cache monitoring support ([534bbe9](https://github.com/typelets/typelets-api/commit/534bbe9f476d3fb92fa40897cbcc68838df66dc7))
+
 ## [1.11.1](https://github.com/typelets/typelets-api/compare/v1.11.0...v1.11.1) (2025-10-18)
 
 ### Bug Fixes
