@@ -1,18 +1,63 @@
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import { db, folders } from "../../db";
-import { reorderFolderSchema } from "../../lib/validation";
+import {
+  reorderFolderRequestSchema,
+  reorderFolderResponseSchema,
+  folderIdParamSchema,
+} from "../../lib/openapi-schemas";
 import { eq, and, desc, asc, isNull } from "drizzle-orm";
 import { deleteCache } from "../../lib/cache";
 import { CacheKeys } from "../../lib/cache-keys";
 
-const actionsRouter = new Hono();
+const actionsRouter = new OpenAPIHono();
 
 // PUT /api/folders/:id/reorder - Reorder folders
-actionsRouter.put("/:id/reorder", zValidator("json", reorderFolderSchema), async (c) => {
+const reorderFolderRoute = createRoute({
+  method: "put",
+  path: "/{id}/reorder",
+  summary: "Reorder folder",
+  description:
+    "Reorders a folder to a new position within its parent. Automatically adjusts the sort order of all sibling folders.",
+  tags: ["Folders"],
+  request: {
+    params: folderIdParamSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: reorderFolderRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Folder reordered successfully",
+      content: {
+        "application/json": {
+          schema: reorderFolderResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Bad request - Invalid new index",
+    },
+    401: {
+      description: "Unauthorized - Invalid or missing authentication",
+    },
+    404: {
+      description: "Folder not found",
+    },
+    500: {
+      description: "Internal server error - Failed to reorder folders",
+    },
+  },
+  security: [{ Bearer: [] }],
+});
+
+actionsRouter.openapi(reorderFolderRoute, async (c) => {
   const userId = c.get("userId");
-  const folderId = c.req.param("id");
+  const { id: folderId } = c.req.valid("param");
   const { newIndex } = c.req.valid("json");
 
   // Check if folder exists and belongs to user
@@ -46,7 +91,14 @@ actionsRouter.put("/:id/reorder", zValidator("json", reorderFolderSchema), async
 
   // If already in correct position, no need to do anything
   if (currentIndex === newIndex) {
-    return c.json({ message: "Folder already in correct position" });
+    return c.json(
+      {
+        message: "Folder already in correct position",
+        folderId,
+        newIndex,
+      },
+      200
+    );
   }
 
   try {
@@ -74,11 +126,14 @@ actionsRouter.put("/:id/reorder", zValidator("json", reorderFolderSchema), async
     // Invalidate cache
     await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));
 
-    return c.json({
-      message: "Folder reordered successfully",
-      folderId,
-      newIndex,
-    });
+    return c.json(
+      {
+        message: "Folder reordered successfully",
+        folderId,
+        newIndex,
+      },
+      200
+    );
   } catch {
     throw new HTTPException(500, { message: "Failed to reorder folders" });
   }

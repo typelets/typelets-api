@@ -1,0 +1,34 @@
+# Prometheus Configuration for Typelets API Monitoring
+# This file is used by the Prometheus server to scrape metrics from the Typelets API
+
+global:
+  scrape_interval: 30s      # How often to scrape targets
+  evaluation_interval: 30s  # How often to evaluate rules
+
+# Scrape configuration for Typelets API
+scrape_configs:
+  - job_name: 'typelets-api'
+    scheme: https
+    basic_auth:
+      username: 'metrics'
+      # IMPORTANT: Replace with your METRICS_API_KEY before deployment
+      # For ECS deployment, set this via environment variable or AWS Secrets Manager
+      password: 'YOUR_METRICS_API_KEY_HERE'
+
+    static_configs:
+      - targets: ['api.typelets.com']
+
+    metrics_path: '/metrics'
+
+    # Optional: Add labels to all metrics from this job
+    # relabel_configs:
+    #   - target_label: 'environment'
+    #     replacement: 'production'
+
+# Storage configuration
+# Prometheus will store data in /prometheus by default
+# For production, consider using remote write to Amazon Managed Service for Prometheus
+# storage:
+#   tsdb:
+#     retention.time: 15d
+#     retention.size: 10GB

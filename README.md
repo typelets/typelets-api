@@ -170,88 +170,57 @@ If you prefer to install PostgreSQL locally instead of Docker:
 
 ## API Endpoints
 
-📚 **Full API documentation with interactive examples available at [https://api.typelets.com/docs](https://api.typelets.com/docs)** (Swagger/OpenAPI)
+📚 **Complete API documentation with interactive examples: [https://api.typelets.com/docs](https://api.typelets.com/docs)** (Swagger/OpenAPI)
+
+The API provides comprehensive REST endpoints for:
+
+- **Users** - Profile management and account deletion
+- **Folders** - Hierarchical folder organization with nested support
+- **Notes** - Full CRUD with encryption support, pagination, filtering, and search
+- **File Attachments** - Encrypted file uploads and downloads
+- **Code Execution** - Secure Judge0 API proxy for running code in multiple languages
+- **Health & Metrics** - System health checks and Prometheus metrics
 
 ### Public Endpoints
 
-- `GET /` - API information and health status
-- `GET /health` - Enhanced health check with system status
-- `GET /metrics` - Prometheus metrics endpoint for Grafana (requires Basic Auth)
-- `GET /ready` - Readiness probe for container orchestration
-- `GET /live` - Liveness probe for container orchestration
-- `GET /websocket/status` - WebSocket server status and statistics
+| Endpoint                | Description                              |
+| ----------------------- | ---------------------------------------- |
+| `GET /`                 | API information and version              |
+| `GET /health`           | Enhanced health check with system status |
+| `GET /metrics`          | Prometheus metrics (requires Basic Auth) |
+| `GET /ready`            | Readiness probe for orchestration        |
+| `GET /live`             | Liveness probe for orchestration         |
+| `GET /websocket/status` | WebSocket server statistics              |
 
 ### Authentication
 
-All `/api/*` endpoints require authentication via Bearer token in the Authorization header.
+All `/api/*` endpoints require authentication via Bearer token:
 
-### Users
+```
+Authorization: Bearer <clerk_jwt_token>
+```
 
-- `GET /api/users/me` - Get current user profile
-- `DELETE /api/users/me` - Delete user account
+### Interactive Documentation
 
-### Folders
+Visit the Swagger UI at [/docs](https://api.typelets.com/docs) for:
 
-- `GET /api/folders` - List all folders
-- `POST /api/folders` - Create new folder
-- `GET /api/folders/:id` - Get folder details
-- `PUT /api/folders/:id` - Update folder
-- `DELETE /api/folders/:id` - Delete folder
-- `POST /api/folders/:id/reorder` - Reorder folder position
-
-### Notes
-
-- `GET /api/notes` - List notes (with pagination and filtering)
-- `POST /api/notes` - Create new note
-- `GET /api/notes/:id` - Get note details
-- `PUT /api/notes/:id` - Update note
-- `DELETE /api/notes/:id` - Delete note (move to trash)
-- `DELETE /api/notes/empty-trash` - Permanently delete trashed notes
-- `POST /api/notes/:id/star` - Star/unstar a note
-- `POST /api/notes/:id/restore` - Restore note from trash
-- `POST /api/notes/:id/hide` - Hide a note
-- `POST /api/notes/:id/unhide` - Unhide a note
-
-### File Attachments
-
-- `POST /api/notes/:noteId/files` - Upload file attachment
-- `GET /api/notes/:noteId/files` - List note attachments
-- `GET /api/files/:id` - Get file details
-- `DELETE /api/files/:id` - Delete file attachment
-
-### Code Execution (requires Judge0 API key)
-
-- `POST /api/code/execute` - Submit code for execution
-- `GET /api/code/status/:token` - Get execution status and results
-- `GET /api/code/languages` - Get supported programming languages
-- `GET /api/code/health` - Check Judge0 service connectivity
+- Complete endpoint reference with request/response schemas
+- Interactive "Try it out" functionality
+- Example requests and responses
+- Schema definitions and validation rules
 
 ### WebSocket Real-time Sync
 
-The API provides real-time synchronization via WebSocket connection at `ws://localhost:3000` (or your configured port).
+Connect to `ws://localhost:3000` (or your deployment URL) for real-time synchronization.
 
-**Connection Flow:**
+**Features:**
 
-1. Connect to WebSocket endpoint
-2. Send authentication message with Clerk JWT token
-3. Join/leave specific notes for real-time updates
-4. Receive real-time sync messages for notes and folders
+- JWT authentication required
+- Real-time note and folder updates
+- Rate limiting (300 msg/min per connection)
+- Connection limits (20 connections per user)
 
-**Message Types:**
-
-- `auth` - Authenticate with JWT token
-- `ping`/`pong` - Heartbeat messages
-- `join_note`/`leave_note` - Subscribe/unsubscribe from note updates
-- `note_update` - Real-time note content changes and folder moves
-- `note_created`/`note_deleted` - Note lifecycle events
-- `folder_created`/`folder_updated`/`folder_deleted` - Folder events
-
-**Security Features:**
-
-- JWT authentication required for all operations
-- Authorization checks ensure users only access their own notes/folders
-- Rate limiting (configurable, default: 300 messages per minute per connection)
-- Connection limits (configurable, default: 20 connections per user)
+**Message types:** `auth`, `ping`/`pong`, `join_note`/`leave_note`, `note_update`, `note_created`/`note_deleted`, `folder_created`/`folder_updated`/`folder_deleted`
 
 ## Database Schema
 
@@ -311,7 +280,26 @@ The application uses the following main tables:
 
 ## Monitoring with Prometheus & Grafana
 
+⚠️ **Monitoring is completely optional** - The API works perfectly without it.
+
 The API exposes Prometheus metrics at the `/metrics` endpoint for monitoring with Grafana or other Prometheus-compatible systems.
+
+📖 **For complete setup instructions, see [grafana/PROMETHEUS.md](grafana/PROMETHEUS.md)**
+📁 **Example configurations available in [grafana/](grafana/) folder**
+
+### Quick Overview
+
+**What's Built-In (Always Available):**
+
+- `/metrics` endpoint with Prometheus format metrics
+- Automatic instrumentation for HTTP, WebSocket, Database, and more
+- No setup required - just add `METRICS_API_KEY` to your `.env`
+
+**What's Optional (In grafana/ folder):**
+
+- Prometheus server deployment configs
+- Grafana dashboard templates
+- AWS ECS task definitions
 
 ### Available Metrics
 
@@ -324,33 +312,33 @@ The API exposes Prometheus metrics at the `/metrics` endpoint for monitoring wit
 - **Security Events**: Security-related event tracking
 - **System Metrics**: Memory, CPU, event loop, and other Node.js metrics
 
-### Grafana Configuration
-
-To connect Grafana to the metrics endpoint:
-
-1. **Generate a secure API key**: `openssl rand -hex 32`
-2. **Set `METRICS_API_KEY` in your environment** (ECS task definition or `.env`)
-3. **Add Prometheus data source in Grafana**:
-   - **Type**: Prometheus
-   - **URL**: `https://api.typelets.com/metrics` (or your API URL)
-   - **Auth**: Basic auth
-   - **User**: `metrics` (or any username)
-   - **Password**: Your `METRICS_API_KEY` value
-
-### Local Testing
-
-Test the metrics endpoint locally:
+### Testing the Metrics Endpoint
 
 ```bash
-# Set your API key in .env
-METRICS_API_KEY=your-secure-key-here
+# 1. Set your API key in .env
+METRICS_API_KEY=your-secure-random-key-here
 
-# Start the server
+# 2. Start the server
 pnpm run dev
 
-# Test with curl (Basic Auth)
-curl -u metrics:your-secure-key-here http://localhost:3000/metrics
+# 3. Test with curl (Basic Auth)
+curl -u metrics:your-secure-random-key-here http://localhost:3000/metrics
 ```
+
+### Setting Up Prometheus & Grafana (Optional)
+
+If you want to visualize metrics in Grafana:
+
+1. **Check the [grafana/](grafana/) folder** for example configuration files
+2. **Read [grafana/PROMETHEUS.md](grafana/PROMETHEUS.md)** for detailed setup instructions
+3. **Choose your deployment option**:
+   - Docker/ECS deployment (see example configs)
+   - Amazon Managed Service for Prometheus
+   - Self-hosted Prometheus
+
+**Architecture**: `API (/metrics)` → `Prometheus Server` → `Grafana`
+
+**Note**: You cannot connect Grafana directly to the `/metrics` endpoint. You need a Prometheus server in between.
 
 ## Development
 

@@ -1,26 +1,64 @@
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
+import { OpenAPIHono, createRoute } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
 import { db, folders, notes } from "../../db";
-import { createFolderSchema, updateFolderSchema, foldersQuerySchema } from "../../lib/validation";
+import {
+  folderWithCountsSchema,
+  foldersListResponseSchema,
+  foldersQueryParamsSchema,
+  folderIdParamSchema,
+  createFolderRequestSchema,
+  updateFolderRequestSchema,
+  folderSchema,
+  deleteFolderResponseSchema,
+} from "../../lib/openapi-schemas";
 import { eq, and, desc, count, asc, isNull } from "drizzle-orm";
 import { getCache, setCache, deleteCache, invalidateNoteCounts } from "../../lib/cache";
 import { CacheKeys, CacheTTL } from "../../lib/cache-keys";
 import { logger } from "../../lib/logger";
 
-const crudRouter = new Hono();
+const crudRouter = new OpenAPIHono();
 
 // GET /api/folders - List folders with pagination and filtering
-crudRouter.get("/", zValidator("query", foldersQuerySchema), async (c) => {
+const listFoldersRoute = createRoute({
+  method: "get",
+  path: "/",
+  summary: "List folders",
+  description:
+    "Returns a paginated list of folders. Supports filtering by parent folder. Results include note counts and child folders.",
+  tags: ["Folders"],
+  request: {
+    query: foldersQueryParamsSchema,
+  },
+  responses: {
+    200: {
+      description: "Folders retrieved successfully",
+      content: {
+        "application/json": {
+          schema: foldersListResponseSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized - Invalid or missing authentication",
+    },
+  },
+  security: [{ Bearer: [] }],
+});
+
+crudRouter.openapi(listFoldersRoute, async (c) => {
   const userId = c.get("userId");
   const query = c.req.valid("query");
 
+  // Set defaults for pagination
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 20;
+
   // Try cache first (only for page 1, no filters)
-  if (query.page === 1 && !query.parentId) {
+  if (page === 1 && !query.parentId) {
     const cacheKey = CacheKeys.foldersList(userId);
     const cached = await getCache(cacheKey);
     if (cached) {
-      return c.json(cached);
+      return c.json(cached, 200);
     }
   }
 
@@ -34,11 +72,11 @@ crudRouter.get("/", zValidator("query", foldersQuerySchema), async (c) => {
 
   const [{ total }] = await db.select({ total: count() }).from(folders).where(whereClause);
 
-  const offset = (query.page - 1) * query.limit;
+  const offset = (page - 1) * limit;
   const userFolders = await db.query.folders.findMany({
     where: whereClause,
     orderBy: [asc(folders.sortOrder), desc(folders.createdAt)],
-    limit: query.limit,
+    limit: limit,
     offset,
     with: {
       notes: {
@@ -59,26 +97,55 @@ crudRouter.get("/", zValidator("query", foldersQuerySchema), async (c) => {
   const result = {
     folders: foldersWithCounts,
     pagination: {
-      page: query.page,
-      limit: query.limit,
+      page,
+      limit,
       total,
-      pages: Math.ceil(total / query.limit),
+      pages: Math.ceil(total / limit),
     },
   };
 
   // Cache result (only for page 1, no filters)
-  if (query.page === 1 && !query.parentId) {
+  if (page === 1 && !query.parentId) {
     const cacheKey = CacheKeys.foldersList(userId);
     await setCache(cacheKey, result, CacheTTL.foldersList);
   }
 
-  return c.json(result);
+  return c.json(result, 200);
 });
 
 // GET /api/folders/:id - Get a single folder
-crudRouter.get("/:id", async (c) => {
+const getFolderRoute = createRoute({
+  method: "get",
+  path: "/{id}",
+  summary: "Get folder by ID",
+  description:
+    "Returns a single folder with note count, child folders, and parent folder information.",
+  tags: ["Folders"],
+  request: {
+    params: folderIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: "Folder retrieved successfully",
+      content: {
+        "application/json": {
+          schema: folderWithCountsSchema,
+        },
+      },
+    },
+    401: {
+      description: "Unauthorized - Invalid or missing authentication",
+    },
+    404: {
+      description: "Folder not found",
+    },
+  },
+  security: [{ Bearer: [] }],
+});
+
+crudRouter.openapi(getFolderRoute, async (c) => {
   const userId = c.get("userId");
-  const folderId = c.req.param("id");
+  const { id: folderId } = c.req.valid("param");
 
   const folder = await db.query.folders.findFirst({
     where: and(eq(folders.id, folderId), eq(folders.userId, userId)),
@@ -97,14 +164,51 @@ crudRouter.get("/:id", async (c) => {
     throw new HTTPException(404, { message: "Folder not found" });
   }
 
-  return c.json({
-    ...folder,
-    noteCount: folder.notes.length,
-  });
+  return c.json(
+    {
+      ...folder,
+      noteCount: folder.notes.length,
+    },
+    200
+  );
 });
 
 // POST /api/folders - Create a new folder
-crudRouter.post("/", zValidator("json", createFolderSchema), async (c) => {
+const createFolderRoute = createRoute({
+  method: "post",
+  path: "/",
+  summary: "Create folder",
+  description: "Creates a new folder. Optionally specify a parent folder for nested organization.",
+  tags: ["Folders"],
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: createFolderRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    201: {
+      description: "Folder created successfully",
+      content: {
+        "application/json": {
+          schema: folderSchema,
+        },
+      },
+    },
+    400: {
+      description: "Bad request - Invalid input or parent folder not found",
+    },
+    401: {
+      description: "Unauthorized - Invalid or missing authentication",
+    },
+  },
+  security: [{ Bearer: [] }],
+});
+
+crudRouter.openapi(createFolderRoute, async (c) => {
   const userId = c.get("userId");
   const data = c.req.valid("json");
 
@@ -151,9 +255,47 @@ crudRouter.post("/", zValidator("json", createFolderSchema), async (c) => {
 });
 
 // PUT /api/folders/:id - Update a folder
-crudRouter.put("/:id", zValidator("json", updateFolderSchema), async (c) => {
+const updateFolderRoute = createRoute({
+  method: "put",
+  path: "/{id}",
+  summary: "Update folder",
+  description: "Updates folder properties (name, color, parent). Prevents circular references.",
+  tags: ["Folders"],
+  request: {
+    params: folderIdParamSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: updateFolderRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Folder updated successfully",
+      content: {
+        "application/json": {
+          schema: folderSchema,
+        },
+      },
+    },
+    400: {
+      description: "Bad request - Invalid input, parent not found, or circular reference",
+    },
+    401: {
+      description: "Unauthorized - Invalid or missing authentication",
+    },
+    404: {
+      description: "Folder not found",
+    },
+  },
+  security: [{ Bearer: [] }],
+});
+
+crudRouter.openapi(updateFolderRoute, async (c) => {
   const userId = c.get("userId");
-  const folderId = c.req.param("id");
+  const { id: folderId } = c.req.valid("param");
   const data = c.req.valid("json");
 
   // Check if folder exists and belongs to user
@@ -210,13 +352,47 @@ crudRouter.put("/:id", zValidator("json", updateFolderSchema), async (c) => {
     await invalidateNoteCounts(userId, oldParentId);
   }
 
-  return c.json(updatedFolder);
+  return c.json(updatedFolder, 200);
 });
 
 // DELETE /api/folders/:id - Delete a folder
-crudRouter.delete("/:id", async (c) => {
+const deleteFolderRoute = createRoute({
+  method: "delete",
+  path: "/{id}",
+  summary: "Delete folder",
+  description: "Deletes an empty folder. Folder must not contain notes or subfolders.",
+  tags: ["Folders"],
+  request: {
+    params: folderIdParamSchema,
+  },
+  responses: {
+    200: {
+      description: "Folder deleted successfully",
+      content: {
+        "application/json": {
+          schema: deleteFolderResponseSchema,
+        },
+      },
+    },
+    400: {
+      description: "Bad request - Folder contains notes or subfolders",
+    },
+    401: {
+      description: "Unauthorized - Invalid or missing authentication",
+    },
+    404: {
+      description: "Folder not found",
+    },
+    500: {
+      description: "Internal server error - Failed to delete folder",
+    },
+  },
+  security: [{ Bearer: [] }],
+});
+
+crudRouter.openapi(deleteFolderRoute, async (c) => {
   const userId = c.get("userId");
-  const folderId = c.req.param("id");
+  const { id: folderId } = c.req.valid("param");
 
   // Check if folder exists and belongs to user
   const existingFolder = await db.query.folders.findFirst({
@@ -281,7 +457,7 @@ crudRouter.delete("/:id", async (c) => {
     // Invalidate note counts cache for parent folder (or global if root-level)
     await invalidateNoteCounts(userId, existingFolder.parentId);
 
-    return c.json({ message: "Folder deleted successfully" });
+    return c.json({ message: "Folder deleted successfully" }, 200);
   } catch (error) {
     logger.error(
       `Failed to delete folder ${folderId}`,

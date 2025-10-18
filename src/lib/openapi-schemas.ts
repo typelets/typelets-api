@@ -72,7 +72,17 @@ export const deleteUserResponseSchema = z
   })
   .openapi("DeleteUserResponse");
 
-// Folder schemas (for nested objects in notes)
+// Common schemas
+export const paginationSchema = z
+  .object({
+    page: z.number().openapi({ example: 1, description: "Current page" }),
+    limit: z.number().openapi({ example: 20, description: "Items per page" }),
+    total: z.number().openapi({ example: 100, description: "Total items" }),
+    pages: z.number().openapi({ example: 5, description: "Total pages" }),
+  })
+  .openapi("Pagination");
+
+// Folder schemas
 export const folderSchema = z
   .object({
     id: z
@@ -99,6 +109,147 @@ export const folderSchema = z
       .openapi({ example: "2025-01-01T00:00:00.000Z", description: "Updated date" }),
   })
   .openapi("Folder");
+
+export const folderWithCountsSchema = folderSchema
+  .extend({
+    noteCount: z.number().openapi({ example: 12, description: "Number of active notes in folder" }),
+    children: z.array(folderSchema).optional().openapi({ description: "Child folders" }),
+    parent: folderSchema.nullable().optional().openapi({ description: "Parent folder" }),
+  })
+  .openapi("FolderWithCounts");
+
+export const createFolderRequestSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1)
+      .max(100)
+      .openapi({ example: "Work Projects", description: "Folder name (1-100 characters)" }),
+    color: z
+      .string()
+      .regex(/^#[0-9A-F]{6}$/i)
+      .nullable()
+      .optional()
+      .openapi({ example: "#3b82f6", description: "Folder color (hex format #RRGGBB)" }),
+    parentId: z
+      .string()
+      .uuid()
+      .nullable()
+      .optional()
+      .openapi({ example: null, description: "Parent folder ID (null for root level)" }),
+    isDefault: z
+      .boolean()
+      .optional()
+      .openapi({ example: false, description: "Is this the default folder" }),
+  })
+  .openapi("CreateFolderRequest");
+
+export const updateFolderRequestSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1)
+      .max(100)
+      .optional()
+      .openapi({ example: "Updated Folder Name", description: "Folder name (1-100 characters)" }),
+    color: z
+      .string()
+      .regex(/^#[0-9A-F]{6}$/i)
+      .nullable()
+      .optional()
+      .openapi({ example: "#ef4444", description: "Folder color (hex format #RRGGBB)" }),
+    parentId: z
+      .string()
+      .uuid()
+      .nullable()
+      .optional()
+      .openapi({ example: null, description: "Parent folder ID (null for root level)" }),
+  })
+  .openapi("UpdateFolderRequest");
+
+export const reorderFolderRequestSchema = z
+  .object({
+    newIndex: z
+      .number()
+      .int()
+      .min(0)
+      .openapi({ example: 2, description: "New position index for the folder" }),
+  })
+  .openapi("ReorderFolderRequest");
+
+export const foldersQueryParamsSchema = z
+  .object({
+    parentId: z
+      .string()
+      .uuid()
+      .optional()
+      .openapi({
+        param: { name: "parentId", in: "query" },
+        example: "123e4567-e89b-12d3-a456-426614174000",
+        description: "Filter by parent folder ID (omit for root-level folders)",
+      }),
+    page: z.coerce
+      .number()
+      .min(1)
+      .optional()
+      .openapi({
+        param: { name: "page", in: "query" },
+        example: "1",
+        description: "Page number (default: 1)",
+      }),
+    limit: z.coerce
+      .number()
+      .min(1)
+      .max(50)
+      .optional()
+      .openapi({
+        param: { name: "limit", in: "query" },
+        example: "20",
+        description: "Items per page (1-50, default: 20)",
+      }),
+  })
+  .openapi("FoldersQueryParams");
+
+export const foldersListResponseSchema = z
+  .object({
+    folders: z
+      .array(folderWithCountsSchema)
+      .openapi({ description: "Array of folders with counts" }),
+    pagination: paginationSchema,
+  })
+  .openapi("FoldersListResponse");
+
+export const folderIdParamSchema = z.object({
+  id: z
+    .string()
+    .uuid()
+    .openapi({
+      param: { name: "id", in: "path" },
+      example: "123e4567-e89b-12d3-a456-426614174000",
+      description: "Folder ID",
+    }),
+});
+
+export const deleteFolderResponseSchema = z
+  .object({
+    message: z
+      .string()
+      .openapi({ example: "Folder deleted successfully", description: "Success message" }),
+  })
+  .openapi("DeleteFolderResponse");
+
+export const reorderFolderResponseSchema = z
+  .object({
+    message: z
+      .string()
+      .openapi({ example: "Folder reordered successfully", description: "Success message" }),
+    folderId: z
+      .string()
+      .uuid()
+      .openapi({ example: "123e4567-e89b-12d3-a456-426614174000", description: "Folder ID" }),
+    newIndex: z.number().openapi({ example: 2, description: "New position" }),
+  })
+  .openapi("ReorderFolderResponse");
 
 // Note schemas
 const countsObjectSchema = z.object({
@@ -349,15 +500,6 @@ export const notesQueryParamsSchema = z
       }),
   })
   .openapi("NotesQueryParams");
-
-export const paginationSchema = z
-  .object({
-    page: z.number().openapi({ example: 1, description: "Current page" }),
-    limit: z.number().openapi({ example: 20, description: "Items per page" }),
-    total: z.number().openapi({ example: 100, description: "Total items" }),
-    pages: z.number().openapi({ example: 5, description: "Total pages" }),
-  })
-  .openapi("Pagination");
 
 export const notesListResponseSchema = z
   .object({
