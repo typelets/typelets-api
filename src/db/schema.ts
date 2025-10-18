@@ -10,47 +10,62 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const folders = pgTable("folders", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: text("user_id")
-    .references(() => users.id, { onDelete: "cascade" })
-    .notNull(),
-  name: text("name").notNull(),
-  color: text("color").default("#6b7280"),
-  parentId: uuid("parent_id"),
-  sortOrder: integer("sort_order").default(0).notNull(), // Add this field for user-defined ordering
-  isDefault: boolean("is_default").default(false),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+export const folders = pgTable(
+  "folders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    name: text("name").notNull(),
+    color: text("color").default("#6b7280"),
+    parentId: uuid("parent_id"),
+    sortOrder: integer("sort_order").default(0).notNull(), // Add this field for user-defined ordering
+    isDefault: boolean("is_default").default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("idx_folders_user_id").on(table.userId),
+    userSortIdx: index("idx_folders_user_sort").on(table.userId, table.sortOrder.asc()),
+  })
+);
 
-export const notes = pgTable("notes", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: text("user_id")
-    .references(() => users.id, { onDelete: "cascade" })
-    .notNull(),
-  folderId: uuid("folder_id").references(() => folders.id, {
-    onDelete: "set null",
-  }),
+export const notes = pgTable(
+  "notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    folderId: uuid("folder_id").references(() => folders.id, {
+      onDelete: "set null",
+    }),
 
-  title: text("title").notNull(),
-  content: text("content").default(""),
+    title: text("title").notNull(),
+    content: text("content").default(""),
 
-  encryptedTitle: text("encrypted_title"),
-  encryptedContent: text("encrypted_content"),
-  iv: text("iv"), // Initialization vector for AES-GCM encryption
-  salt: text("salt"), // Salt for key derivation
+    encryptedTitle: text("encrypted_title"),
+    encryptedContent: text("encrypted_content"),
+    iv: text("iv"), // Initialization vector for AES-GCM encryption
+    salt: text("salt"), // Salt for key derivation
 
-  starred: boolean("starred").default(false),
-  archived: boolean("archived").default(false),
-  deleted: boolean("deleted").default(false),
-  hidden: boolean("hidden").default(false),
-  hiddenAt: timestamp("hidden_at"),
-  tags: text("tags").array().default([]),
+    starred: boolean("starred").default(false),
+    archived: boolean("archived").default(false),
+    deleted: boolean("deleted").default(false),
+    hidden: boolean("hidden").default(false),
+    hiddenAt: timestamp("hidden_at"),
+    tags: text("tags").array().default([]),
 
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("idx_notes_user_id").on(table.userId),
+    folderIdIdx: index("idx_notes_folder_id").on(table.folderId),
+    userUpdatedIdx: index("idx_notes_user_updated").on(table.userId, table.updatedAt.desc()),
+  })
+);
 
 export const fileAttachments = pgTable(
   "file_attachments",

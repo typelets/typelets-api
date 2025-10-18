@@ -10,7 +10,6 @@ import {
   codeHealthResponseSchema,
   tokenParamSchema,
 } from "../../lib/openapi-schemas";
-import * as prometheus from "../../lib/prometheus";
 
 const crudRouter = new OpenAPIHono();
 
@@ -174,13 +173,6 @@ crudRouter.openapi(executeCodeRoute, async (c) => {
 
     const result = await response.json();
 
-    // Track code execution submission
-    const duration = Date.now() - startTime;
-    prometheus.codeExecutionDuration.observe(
-      { language_id: body.language_id.toString() },
-      duration
-    );
-
     return c.json(result);
   } catch (error) {
     if (error instanceof HTTPException) {
@@ -255,16 +247,6 @@ crudRouter.openapi(getStatusRoute, async (c) => {
     }
     if (result.message) {
       result.message = Buffer.from(result.message, "base64").toString("utf-8");
-    }
-
-    // Track completed executions
-    // Status IDs: 1=In Queue, 2=Processing, 3=Accepted, 4+=Various errors
-    if (result.status?.id && result.status.id >= 3) {
-      const success = result.status.id === 3; // 3 = Accepted (successful execution)
-      prometheus.codeExecutionsTotal.inc({
-        language_id: result.language_id?.toString() || "unknown",
-        success: success.toString(),
-      });
     }
 
     return c.json(result);

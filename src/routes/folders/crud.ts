@@ -70,9 +70,15 @@ crudRouter.openapi(listFoldersRoute, async (c) => {
 
   const whereClause = and(...conditions);
 
+  // Count total folders with metrics
+  const countStart = Date.now();
   const [{ total }] = await db.select({ total: count() }).from(folders).where(whereClause);
+  logger.databaseQuery("count", "folders", Date.now() - countStart, userId);
 
   const offset = (page - 1) * limit;
+
+  // Fetch folders with metrics
+  const queryStart = Date.now();
   const userFolders = await db.query.folders.findMany({
     where: whereClause,
     orderBy: [asc(folders.sortOrder), desc(folders.createdAt)],
@@ -87,6 +93,7 @@ crudRouter.openapi(listFoldersRoute, async (c) => {
       },
     },
   });
+  logger.databaseQuery("select", "folders", Date.now() - queryStart, userId);
 
   const foldersWithCounts = userFolders.map((folder) => ({
     ...folder,
@@ -235,6 +242,8 @@ crudRouter.openapi(createFolderRoute, async (c) => {
 
   const nextSortOrder = existingFolders.length > 0 ? (existingFolders[0].sortOrder || 0) + 1 : 0;
 
+  // Insert folder with metrics
+  const insertStart = Date.now();
   const [newFolder] = await db
     .insert(folders)
     .values({
@@ -243,6 +252,7 @@ crudRouter.openapi(createFolderRoute, async (c) => {
       sortOrder: nextSortOrder,
     })
     .returning();
+  logger.databaseQuery("insert", "folders", Date.now() - insertStart, userId);
 
   // Invalidate folder list cache
   await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));
@@ -325,6 +335,8 @@ crudRouter.openapi(updateFolderRoute, async (c) => {
     }
   }
 
+  // Update folder with metrics
+  const updateStart = Date.now();
   const [updatedFolder] = await db
     .update(folders)
     .set({
@@ -333,6 +345,7 @@ crudRouter.openapi(updateFolderRoute, async (c) => {
     })
     .where(eq(folders.id, folderId))
     .returning();
+  logger.databaseQuery("update", "folders", Date.now() - updateStart, userId);
 
   // Invalidate folder list cache
   await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));
@@ -426,6 +439,7 @@ crudRouter.openapi(deleteFolderRoute, async (c) => {
   }
 
   try {
+    const txStart = Date.now();
     await db.transaction(async (tx) => {
       // Delete the folder
       await tx.delete(folders).where(eq(folders.id, folderId));
@@ -450,6 +464,7 @@ crudRouter.openapi(deleteFolderRoute, async (c) => {
         await Promise.all(updatePromises);
       }
     });
+    logger.databaseQuery("delete", "folders", Date.now() - txStart, userId);
 
     // Invalidate folder list cache
     await deleteCache(CacheKeys.foldersList(userId), CacheKeys.folderTree(userId));

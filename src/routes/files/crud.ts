@@ -13,6 +13,7 @@ import {
   noteIdForFilesParamSchema,
 } from "../../lib/openapi-schemas";
 import { z } from "@hono/zod-openapi";
+import { logger } from "../../lib/logger";
 
 const crudRouter = new OpenAPIHono();
 
@@ -86,11 +87,14 @@ const uploadFileHandler: RouteHandler<typeof uploadFileRoute> = async (c) => {
     });
   }
 
+  // Calculate total attachment size for note
+  const sizeQueryStart = Date.now();
   // noinspection SqlNoDataSourceInspection
   const result = await db
     .select({ totalSize: sql<string>`COALESCE(SUM(size), 0)` })
     .from(fileAttachments)
     .where(eq(fileAttachments.noteId, noteId));
+  logger.databaseQuery("select", "file_attachments", Date.now() - sizeQueryStart, userId);
 
   const totalSize = Number(result[0]?.totalSize || 0);
   const newFileSize = Number(data.size);
@@ -105,6 +109,8 @@ const uploadFileHandler: RouteHandler<typeof uploadFileRoute> = async (c) => {
 
   const filename = `${randomUUID()}_${Date.now()}`;
 
+  // Insert file attachment with metrics
+  const insertStart = Date.now();
   const [newAttachment] = await db
     .insert(fileAttachments)
     .values({
@@ -126,6 +132,13 @@ const uploadFileHandler: RouteHandler<typeof uploadFileRoute> = async (c) => {
       size: fileAttachments.size,
       uploadedAt: fileAttachments.uploadedAt,
     });
+  logger.databaseQuery("insert", "file_attachments", Date.now() - insertStart, userId);
+
+  // Log file upload metrics
+  logger.fileUpload(data.originalName, data.size, data.mimeType, true, userId, noteId);
+
+  // Update storage metrics with new total
+  logger.storageUpdate(combinedSize, "add", newFileSize);
 
   return c.json(newAttachment, 201);
 };
@@ -274,7 +287,11 @@ crudRouter.openapi(deleteFileRoute, async (c) => {
   const { fileId } = c.req.valid("param");
 
   const file = await db
-    .select({ id: fileAttachments.id })
+    .select({
+      id: fileAttachments.id,
+      size: fileAttachments.size,
+      noteId: fileAttachments.noteId,
+    })
     .from(fileAttachments)
     .innerJoin(notes, eq(fileAttachments.noteId, notes.id))
     .where(and(eq(fileAttachments.id, fileId), eq(notes.userId, userId)))
@@ -284,7 +301,24 @@ crudRouter.openapi(deleteFileRoute, async (c) => {
     throw new HTTPException(404, { message: "File not found" });
   }
 
+  const fileSize = Number(file[0].size);
+  const noteId = file[0].noteId;
+
+  // Delete file with metrics
+  const deleteStart = Date.now();
   await db.delete(fileAttachments).where(eq(fileAttachments.id, fileId));
+  logger.databaseQuery("delete", "file_attachments", Date.now() - deleteStart, userId);
+
+  // Calculate new total storage for the note after deletion
+  const result = await db
+    .select({ totalSize: sql<string>`COALESCE(SUM(size), 0)` })
+    .from(fileAttachments)
+    .where(eq(fileAttachments.noteId, noteId));
+
+  const newTotalSize = Number(result[0]?.totalSize || 0);
+
+  // Update storage metrics
+  logger.storageUpdate(newTotalSize, "remove", fileSize);
 
   return c.body(null, 204);
 });

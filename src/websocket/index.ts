@@ -11,7 +11,6 @@ import { ConnectionManager } from "./middleware/connection-manager";
 import { AuthHandler } from "./auth/handler";
 import { NoteHandler } from "./handlers/notes";
 import { FolderHandler } from "./handlers/folders";
-import * as prometheus from "../lib/prometheus";
 
 export class WebSocketManager {
   private wss: WebSocketServer;
@@ -53,11 +52,8 @@ export class WebSocketManager {
         console.log("New WebSocket connection established");
       }
 
-      // Record WebSocket connection metrics
-      prometheus.websocketConnectionsTotal.inc();
-
       // Add connection start time for duration tracking
-      (ws as WebSocket & { connectionStart: number }).connectionStart = connectionStart;
+      ws.connectionStart = connectionStart;
 
       // Set authentication timeout
       this.authHandler.setupAuthTimeout(ws);
@@ -109,12 +105,6 @@ export class WebSocketManager {
             return;
           }
 
-          // Record inbound WebSocket message
-          prometheus.websocketMessagesTotal.inc({
-            type: message.type,
-            direction: "inbound",
-          });
-
           await this.handleMessage(ws, message);
 
           const messageDuration = Date.now() - messageStart;
@@ -141,18 +131,13 @@ export class WebSocketManager {
 
       ws.on("close", (): void => {
         // Track connection duration
-        const connectionDuration =
-          Date.now() -
-          ((ws as WebSocket & { connectionStart?: number }).connectionStart || Date.now());
+        const connectionDuration = Date.now() - (ws.connectionStart || Date.now());
 
         if (process.env.NODE_ENV === "development") {
           console.log(
             `🔌 WebSocket disconnected (${Math.round(connectionDuration / 1000)}s session)`
           );
         }
-
-        // Record WebSocket disconnection metrics
-        prometheus.websocketConnectionsTotal.dec();
 
         this.handleDisconnection(ws);
       });
@@ -277,14 +262,6 @@ export class WebSocketManager {
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, syncMessage);
 
-    // Track outbound messages (one per device)
-    for (let i = 0; i < sentCount; i++) {
-      prometheus.websocketMessagesTotal.inc({
-        type: "note_sync",
-        direction: "outbound",
-      });
-    }
-
     console.log(
       `Server notified ${sentCount} devices about note ${noteId} update for user ${userId}`
     );
@@ -299,14 +276,6 @@ export class WebSocketManager {
     };
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, createMessage);
-
-    // Track outbound messages
-    for (let i = 0; i < sentCount; i++) {
-      prometheus.websocketMessagesTotal.inc({
-        type: "note_created_sync",
-        direction: "outbound",
-      });
-    }
 
     console.log(
       `Server notified ${sentCount} devices about new note ${noteData.id} for user ${userId}`
@@ -323,14 +292,6 @@ export class WebSocketManager {
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, deleteMessage);
 
-    // Track outbound messages
-    for (let i = 0; i < sentCount; i++) {
-      prometheus.websocketMessagesTotal.inc({
-        type: "note_deleted_sync",
-        direction: "outbound",
-      });
-    }
-
     console.log(
       `Server notified ${sentCount} devices about note ${noteId} deletion for user ${userId}`
     );
@@ -345,14 +306,6 @@ export class WebSocketManager {
     };
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, createMessage);
-
-    // Track outbound messages
-    for (let i = 0; i < sentCount; i++) {
-      prometheus.websocketMessagesTotal.inc({
-        type: "folder_created_sync",
-        direction: "outbound",
-      });
-    }
 
     console.log(
       `Server notified ${sentCount} devices about new folder ${folderData.id} for user ${userId}`
@@ -376,14 +329,6 @@ export class WebSocketManager {
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, updateMessage);
 
-    // Track outbound messages
-    for (let i = 0; i < sentCount; i++) {
-      prometheus.websocketMessagesTotal.inc({
-        type: "folder_updated_sync",
-        direction: "outbound",
-      });
-    }
-
     console.log(
       `Server notified ${sentCount} devices about folder ${folderId} update for user ${userId}`
     );
@@ -398,14 +343,6 @@ export class WebSocketManager {
     };
 
     const sentCount = this.connectionManager.broadcastToUserDevices(userId, deleteMessage);
-
-    // Track outbound messages
-    for (let i = 0; i < sentCount; i++) {
-      prometheus.websocketMessagesTotal.inc({
-        type: "folder_deleted_sync",
-        direction: "outbound",
-      });
-    }
 
     console.log(
       `Server notified ${sentCount} devices about folder ${folderId} deletion for user ${userId}`

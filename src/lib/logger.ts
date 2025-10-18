@@ -1,5 +1,3 @@
-import * as prometheus from "./prometheus";
-
 interface LogLevel {
   level: string;
   priority: number;
@@ -89,13 +87,6 @@ class Logger {
       duration,
       userId: userId || "anonymous",
     });
-
-    // Record Prometheus metrics
-    prometheus.httpRequestsTotal.inc({ method, path, status: statusCode.toString() });
-    prometheus.httpRequestDuration.observe(
-      { method, path, status: statusCode.toString() },
-      duration
-    );
   }
 
   websocketEvent(eventType: string, userId?: string, connectionCount?: number): void {
@@ -120,10 +111,6 @@ class Logger {
       duration,
       userId: userId || "anonymous",
     });
-
-    // Record Prometheus metrics
-    prometheus.databaseQueriesTotal.inc({ operation, table });
-    prometheus.databaseQueryDuration.observe({ operation, table }, duration);
   }
 
   codeExecution(languageId: number, duration: number, success: boolean, userId?: string): void {
@@ -143,9 +130,6 @@ class Logger {
       userId,
       ...metadata,
     });
-
-    // Record Prometheus metrics
-    prometheus.businessEventsTotal.inc({ event_name: eventName });
   }
 
   securityEvent(
@@ -159,9 +143,6 @@ class Logger {
       severity,
       ...details,
     });
-
-    // Record Prometheus metrics
-    prometheus.securityEventsTotal.inc({ event_type: eventType, severity });
   }
 
   // Cache-specific logging methods
@@ -186,20 +167,6 @@ class Logger {
 
     // Log at debug level
     this.debug(`Cache ${operation}${hit !== undefined ? (hit ? " HIT" : " MISS") : ""}`, meta);
-
-    // Record Prometheus metrics
-    prometheus.cacheOperationsTotal.inc({
-      operation,
-      status: hit !== undefined ? (hit ? "hit" : "miss") : "success",
-    });
-
-    if (hit !== undefined) {
-      prometheus.cacheHitRate.inc({ result: hit ? "hit" : "miss" });
-    }
-
-    if (duration !== undefined) {
-      prometheus.cacheOperationDuration.observe({ operation }, duration);
-    }
   }
 
   cacheError(operation: string, key: string, error: Error): void {
@@ -213,9 +180,38 @@ class Logger {
       },
       error
     );
+  }
 
-    // Record Prometheus metrics
-    prometheus.cacheOperationsTotal.inc({ operation, status: "error" });
+  // File upload logging methods
+  fileUpload(
+    filename: string,
+    size: number,
+    mimeType: string,
+    success: boolean,
+    userId?: string,
+    noteId?: string
+  ): void {
+    const status = success ? "success" : "failed";
+
+    this.info(`File upload ${status}`, {
+      type: "file_upload",
+      filename,
+      size,
+      mimeType,
+      status,
+      userId: userId || "anonymous",
+      noteId: noteId || "unknown",
+    });
+  }
+
+  // Storage tracking method
+  storageUpdate(totalBytes: number, operation: "add" | "remove", deltaBytes?: number): void {
+    this.debug("Storage updated", {
+      type: "storage_update",
+      totalBytes,
+      operation,
+      deltaBytes: deltaBytes || 0,
+    });
   }
 }
 

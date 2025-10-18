@@ -1,7 +1,11 @@
 import "dotenv-flow/config";
 
+// IMPORTANT: Import instrument.ts at the top of the file to initialize Sentry
+import "./instrument";
+
 const isDevelopment = process.env.NODE_ENV === "development";
 
+import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
@@ -23,9 +27,22 @@ import countsRouter from "./routes/notes/counts";
 import usersRouter from "./routes/users/crud";
 import filesRouter from "./routes/files/crud";
 import codeRouter from "./routes/code/crud";
-import metricsRouter from "./routes/metrics";
 import { VERSION } from "./version";
 import { logger } from "./lib/logger";
+
+// Type for OpenAPI routers
+interface OpenAPIRouter {
+  getOpenAPIDocument: (config?: Record<string, unknown>) => {
+    openapi?: string;
+    info?: Record<string, unknown>;
+    servers?: Array<Record<string, unknown>>;
+    paths: Record<string, unknown>;
+    components?: {
+      schemas?: Record<string, unknown>;
+      securitySchemes?: Record<string, unknown>;
+    };
+  };
+}
 
 const maxFileSize = process.env.MAX_FILE_SIZE_MB ? parseInt(process.env.MAX_FILE_SIZE_MB) : 50;
 const maxBodySize = Math.ceil(maxFileSize * 1.35);
@@ -62,6 +79,17 @@ app.use("*", async (c, next) => {
       status >= 200 && status < 300 ? "✅" : status >= 400 && status < 500 ? "⚠️" : "❌";
     console.log(`${emoji} [${method}] ${path} - ${status} (${duration}ms)`);
   }
+});
+
+// Sentry user context middleware
+app.use("*", async (c, next) => {
+  // Set user context if available (after auth middleware runs, userId will be set)
+  const userId = c.get("userId");
+  if (userId) {
+    Sentry.setUser({ id: userId });
+  }
+
+  return next();
 });
 
 // HTTP API Rate Limiting Configuration
@@ -172,7 +200,7 @@ app.get(
 // Serve OpenAPI spec
 app.get("/api/openapi.json", (c) => {
   // Get OpenAPI documents from routers
-  const usersDoc = (usersRouter as any).getOpenAPIDocument({
+  const usersDoc = (usersRouter as OpenAPIRouter).getOpenAPIDocument({
     openapi: "3.1.0",
     info: {
       title: "Typelets API",
@@ -192,12 +220,14 @@ app.get("/api/openapi.json", (c) => {
     ],
   });
 
-  const countsDoc = (countsRouter as any).getOpenAPIDocument({});
-  const crudDoc = (crudRouter as any).getOpenAPIDocument({});
-  const actionsDoc = (actionsRouter as any).getOpenAPIDocument({});
-  const trashDoc = (trashRouter as any).getOpenAPIDocument({});
-  const filesDoc = (filesRouter as any).getOpenAPIDocument({});
-  const codeDoc = (codeRouter as any).getOpenAPIDocument({});
+  const countsDoc = (countsRouter as OpenAPIRouter).getOpenAPIDocument({});
+  const crudDoc = (crudRouter as OpenAPIRouter).getOpenAPIDocument({});
+  const actionsDoc = (actionsRouter as OpenAPIRouter).getOpenAPIDocument({});
+  const trashDoc = (trashRouter as OpenAPIRouter).getOpenAPIDocument({});
+  const filesDoc = (filesRouter as OpenAPIRouter).getOpenAPIDocument({});
+  const codeDoc = (codeRouter as OpenAPIRouter).getOpenAPIDocument({});
+  const foldersCrudDoc = (foldersCrudRouter as OpenAPIRouter).getOpenAPIDocument({});
+  const foldersActionsDoc = (foldersActionsRouter as OpenAPIRouter).getOpenAPIDocument({});
 
   // Merge paths from all routers into usersDoc
   if (!usersDoc.paths) {
@@ -205,7 +235,7 @@ app.get("/api/openapi.json", (c) => {
   }
 
   // Prefix users paths with /api/users
-  const prefixedUsersPaths: any = {};
+  const prefixedUsersPaths: Record<string, unknown> = {};
   Object.keys(usersDoc.paths).forEach((path) => {
     prefixedUsersPaths[`/api/users${path}`] = usersDoc.paths[path];
   });
@@ -260,6 +290,22 @@ app.get("/api/openapi.json", (c) => {
     });
   }
 
+  // Merge folders crud paths with /api/folders prefix
+  if (foldersCrudDoc.paths) {
+    Object.keys(foldersCrudDoc.paths).forEach((path) => {
+      const fullPath = path === "" || path === "/" ? "/api/folders" : `/api/folders${path}`;
+      usersDoc.paths[fullPath] = foldersCrudDoc.paths[path];
+    });
+  }
+
+  // Merge folders actions paths with /api/folders prefix
+  if (foldersActionsDoc.paths) {
+    Object.keys(foldersActionsDoc.paths).forEach((path) => {
+      const fullPath = path === "" || path === "/" ? "/api/folders" : `/api/folders${path}`;
+      usersDoc.paths[fullPath] = foldersActionsDoc.paths[path];
+    });
+  }
+
   // Merge schemas from all routers
   if (!usersDoc.components) {
     usersDoc.components = {};
@@ -292,6 +338,14 @@ app.get("/api/openapi.json", (c) => {
     Object.assign(usersDoc.components.schemas, codeDoc.components.schemas);
   }
 
+  if (foldersCrudDoc.components?.schemas) {
+    Object.assign(usersDoc.components.schemas, foldersCrudDoc.components.schemas);
+  }
+
+  if (foldersActionsDoc.components?.schemas) {
+    Object.assign(usersDoc.components.schemas, foldersActionsDoc.components.schemas);
+  }
+
   // Manually add securitySchemes to components
   usersDoc.components.securitySchemes = {
     Bearer: {
@@ -316,9 +370,6 @@ app.get("/websocket/status", (c) => {
     timestamp: new Date().toISOString(),
   });
 });
-
-// Add metrics routes (before auth middleware)
-app.route("/", metricsRouter);
 
 app.use("*", authMiddleware);
 
@@ -362,6 +413,16 @@ app.onError((err, c) => {
 
   // Get user context
   const userId = c.get("userId") || "anonymous";
+
+  // Capture exception in Sentry
+  Sentry.captureException(err, {
+    extra: {
+      errorId,
+      url: c.req.url,
+      method: c.req.method,
+      userId,
+    },
+  });
 
   // Log full error details server-side only
   logger.error(

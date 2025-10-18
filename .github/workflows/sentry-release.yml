@@ -1,0 +1,38 @@
+name: Sentry Release Tracking
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  sentry-release:
+    runs-on: ubuntu-latest
+    name: Create Sentry Release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for commit tracking
+
+      - name: Set Release Version from Tag
+        run: echo "RELEASE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+
+      - name: Install Sentry CLI
+        run: curl -sL https://sentry.io/get-cli/ | bash
+
+      - name: Create Sentry Release
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: bata-labs
+          SENTRY_PROJECT: typelets-api
+        run: |
+          # Create new release
+          sentry-cli releases new "${{ env.RELEASE_VERSION }}"
+
+          # Associate commits with the release (auto-detect from git)
+          sentry-cli releases set-commits "${{ env.RELEASE_VERSION }}" --auto
+
+          # Finalize the release
+          sentry-cli releases finalize "${{ env.RELEASE_VERSION }}"
+
+          echo "✅ Sentry release ${{ env.RELEASE_VERSION }} created successfully"

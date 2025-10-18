@@ -2,7 +2,7 @@
 
 [![Version](https://img.shields.io/github/package-json/v/typelets/typelets-api)](https://github.com/typelets/typelets-api/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/Node.js-20%2B-green.svg)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22%2B-green.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8%2B-blue.svg)](https://www.typescriptlang.org/)
 [![Hono](https://img.shields.io/badge/Hono-4.8%2B-orange.svg)](https://hono.dev/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15%2B-blue.svg)](https://www.postgresql.org/)
@@ -22,32 +22,32 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - ⚡ **Fast & Type-Safe** with TypeScript and Hono
 - 🐘 **PostgreSQL** with Drizzle ORM
 - 🚀 **Valkey/Redis Caching** for high-performance data access with cluster support
-- 📊 **Prometheus Metrics** with Grafana integration for monitoring and observability
+- 📊 **Error Tracking & Monitoring** with Sentry.io for observability and performance monitoring
 - 💻 **Code Execution** via secure Judge0 API proxy
 - 🛡️ **Comprehensive Rate Limiting** for HTTP, WebSocket, file uploads, and code execution
 - 🏥 **Health Checks** with detailed system status and readiness probes
-- 📈 **Structured Logging** with automatic metrics and business event tracking
+- 📈 **Structured Logging** with automatic event tracking and error capture
 
 ## Tech Stack
 
-- **Runtime**: Node.js 20+ (LTS recommended)
+- **Runtime**: Node.js 22+ (LTS recommended)
 - **Framework**: [Hono](https://hono.dev/) - Fast, lightweight web framework
 - **Database**: PostgreSQL with [Drizzle ORM](https://orm.drizzle.team/)
 - **Cache**: Valkey/Redis Cluster for high-performance caching
 - **Authentication**: [Clerk](https://clerk.com/)
 - **Validation**: [Zod](https://zod.dev/)
-- **Monitoring**: [Prometheus](https://prometheus.io/) metrics with [Grafana](https://grafana.com/) for observability
-- **Logging**: Structured JSON logging with Prometheus metrics integration
+- **Monitoring**: [Sentry.io](https://sentry.io/) for error tracking and performance monitoring
+- **Logging**: Structured JSON logging with automatic error capture
 - **TypeScript**: Strict mode enabled for type safety
 
 ## Prerequisites
 
-- Node.js 20+ (LTS recommended)
+- Node.js 22+ (LTS recommended)
 - pnpm 9.15.0+
 - PostgreSQL database (local installation or Docker)
 - Clerk account for authentication ([sign up here](https://dashboard.clerk.com))
 - Valkey/Redis cluster for caching (optional - improves performance)
-- Grafana workspace for monitoring (optional - AWS Managed Grafana or self-hosted)
+- Sentry.io account for monitoring (optional - [sign up here](https://sentry.io/signup/))
 - Judge0 API key for code execution (optional - [get from RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce))
 
 ## Local Development Setup
@@ -179,7 +179,7 @@ The API provides comprehensive REST endpoints for:
 - **Notes** - Full CRUD with encryption support, pagination, filtering, and search
 - **File Attachments** - Encrypted file uploads and downloads
 - **Code Execution** - Secure Judge0 API proxy for running code in multiple languages
-- **Health & Metrics** - System health checks and Prometheus metrics
+- **Health Checks** - System health checks and status monitoring
 
 ### Public Endpoints
 
@@ -187,9 +187,6 @@ The API provides comprehensive REST endpoints for:
 | ----------------------- | ---------------------------------------- |
 | `GET /`                 | API information and version              |
 | `GET /health`           | Enhanced health check with system status |
-| `GET /metrics`          | Prometheus metrics (requires Basic Auth) |
-| `GET /ready`            | Readiness probe for orchestration        |
-| `GET /live`             | Liveness probe for orchestration         |
 | `GET /websocket/status` | WebSocket server statistics              |
 
 ### Authentication
@@ -255,7 +252,7 @@ The application uses the following main tables:
 | `VALKEY_HOST`                  | Valkey/Redis cluster hostname                    | No       | -                                |
 | `VALKEY_PORT`                  | Valkey/Redis cluster port                        | No       | 6379                             |
 | **Monitoring (Optional)**      |                                                  |          |                                  |
-| `METRICS_API_KEY`              | API key for Prometheus metrics endpoint          | No       | -                                |
+| `SENTRY_DSN`                   | Sentry.io DSN for error tracking                 | No       | -                                |
 | **Rate Limiting**              |                                                  |          |                                  |
 | `HTTP_RATE_LIMIT_WINDOW_MS`    | HTTP rate limit window in milliseconds           | No       | 900000 (15 min)                  |
 | `HTTP_RATE_LIMIT_MAX_REQUESTS` | Max HTTP requests per window                     | No       | 1000                             |
@@ -278,67 +275,103 @@ The application uses the following main tables:
 
 \*Required only for code execution features
 
-## Monitoring with Prometheus & Grafana
+## Monitoring with Sentry.io
 
 ⚠️ **Monitoring is completely optional** - The API works perfectly without it.
 
-The API exposes Prometheus metrics at the `/metrics` endpoint for monitoring with Grafana or other Prometheus-compatible systems.
+The API integrates with [Sentry.io](https://sentry.io/) for comprehensive error tracking, performance monitoring, and logging.
 
-📖 **For complete setup instructions, see [grafana/PROMETHEUS.md](grafana/PROMETHEUS.md)**
-📁 **Example configurations available in [grafana/](grafana/) folder**
+### Features
 
-### Quick Overview
+- **Error Tracking**: Automatic exception capture with full stack traces and context
+- **Source Maps**: Production builds automatically upload source maps for readable stack traces
+- **Performance Monitoring**: 100% transaction sampling for performance analysis
+- **Database Monitoring**: Automatic PostgreSQL query tracking and performance analysis
+- **Profiling**: CPU and memory profiling during active traces
+- **Structured Logging**: Automatic capture of console.log, console.warn, and console.error
+- **User Context**: Errors are automatically associated with authenticated users
+- **Environment Tracking**: Separate error tracking for development and production
+- **Release Tracking**: Errors automatically linked to code releases via GitHub Actions
 
-**What's Built-In (Always Available):**
+### Configuration
 
-- `/metrics` endpoint with Prometheus format metrics
-- Automatic instrumentation for HTTP, WebSocket, Database, and more
-- No setup required - just add `METRICS_API_KEY` to your `.env`
+Sentry is configured in the application with:
 
-**What's Optional (In grafana/ folder):**
+- Profiling integration enabled
+- Console logging integration
+- 100% trace sampling rate
+- PII data collection for better debugging
+- Environment-based configuration
 
-- Prometheus server deployment configs
-- Grafana dashboard templates
-- AWS ECS task definitions
+**Setup**: Add your Sentry DSN to `.env`:
 
-### Available Metrics
-
-- **HTTP Metrics**: Request counts, duration histograms, status codes
-- **WebSocket Metrics**: Active connections, message counts by type and direction
-- **Database Metrics**: Query counts and duration by operation and table
-- **Cache Metrics**: Operations, hit/miss rates, operation duration
-- **Code Execution Metrics**: Execution duration and success rates by language
-- **Business Events**: Custom event tracking
-- **Security Events**: Security-related event tracking
-- **System Metrics**: Memory, CPU, event loop, and other Node.js metrics
-
-### Testing the Metrics Endpoint
-
-```bash
-# 1. Set your API key in .env
-METRICS_API_KEY=your-secure-random-key-here
-
-# 2. Start the server
-pnpm run dev
-
-# 3. Test with curl (Basic Auth)
-curl -u metrics:your-secure-random-key-here http://localhost:3000/metrics
+```env
+SENTRY_DSN=https://your-key@your-org-id.ingest.us.sentry.io/your-project-id
 ```
 
-### Setting Up Prometheus & Grafana (Optional)
+Get your DSN from: [Sentry.io Project Settings](https://sentry.io/settings/bata-labs/projects/typelets-api/keys/)
 
-If you want to visualize metrics in Grafana:
+Once configured, all errors are automatically captured and sent to Sentry with contextual information including:
 
-1. **Check the [grafana/](grafana/) folder** for example configuration files
-2. **Read [grafana/PROMETHEUS.md](grafana/PROMETHEUS.md)** for detailed setup instructions
-3. **Choose your deployment option**:
-   - Docker/ECS deployment (see example configs)
-   - Amazon Managed Service for Prometheus
-   - Self-hosted Prometheus
+- Error ID for tracking
+- User ID (if authenticated)
+- Request URL and method
+- Stack traces
 
-**Architecture**: `API (/metrics)` → `Prometheus Server` → `Grafana`
+If `SENTRY_DSN` is not set, the application will run normally with error tracking disabled.
 
-**Note**: You cannot connect Grafana directly to the `/metrics` endpoint. You need a Prometheus server in between.
+### Source Maps
+
+Source maps are automatically generated during builds and uploaded to Sentry in production:
+
+**Development builds:**
+
+- Source maps are generated locally for debugging
+- Not uploaded to Sentry (saves bandwidth and quota)
+
+**Production builds:**
+
+- Source maps are generated and uploaded to Sentry
+- Requires `SENTRY_AUTH_TOKEN` environment variable
+- Stack traces in Sentry show your original TypeScript code, not bundled JavaScript
+- Source maps are deleted after upload to keep deployments clean
+
+**Setup:**
+
+1. Create a Sentry Auth Token: [Sentry Settings → Auth Tokens](https://sentry.io/settings/account/api/auth-tokens/)
+2. Required scopes: `project:releases`, `project:write`
+3. Add to your environment:
+   ```bash
+   export SENTRY_AUTH_TOKEN=your-token-here
+   NODE_ENV=production pnpm run build
+   ```
+
+The build will automatically upload source maps when both `NODE_ENV=production` and `SENTRY_AUTH_TOKEN` are set.
+
+### Automated Release Tracking
+
+The repository includes automated Sentry release tracking via GitHub Actions. When a new release is published:
+
+1. **Automatic Release Creation**: A Sentry release is created with the version tag
+2. **Commit Association**: All commits are automatically associated with the release
+3. **Error Attribution**: Errors can be traced back to specific releases
+
+**Setup Required (One-time)**:
+
+To enable automated release tracking and source map uploads, add your Sentry Auth Token as a GitHub secret:
+
+1. Go to **Sentry.io** → **Settings** → **Auth Tokens**
+2. Create a new token with `project:releases` and `project:write` scopes
+3. In GitHub, go to **Settings** → **Secrets and variables** → **Actions**
+4. Create a new secret named `SENTRY_AUTH_TOKEN` with your token value
+
+**Note**: The same token is used for both release tracking and source map uploads during CI/CD builds.
+
+The workflow automatically triggers on every release and:
+
+- Creates a new Sentry release with the version tag
+- Associates all commits since the last release
+- Finalizes the release for tracking
 
 ## Development
 
@@ -352,8 +385,7 @@ src/
 ├── lib/
 │   ├── cache.ts        # Valkey/Redis cluster caching layer
 │   ├── cache-keys.ts   # Centralized cache key patterns and TTL values
-│   ├── logger.ts       # Structured logging with Prometheus metrics integration
-│   ├── prometheus.ts   # Prometheus metrics definitions and registry
+│   ├── logger.ts       # Structured logging with automatic error capture
 │   └── validation.ts   # Zod validation schemas
 ├── middleware/
 │   ├── auth.ts         # Authentication middleware
@@ -364,7 +396,6 @@ src/
 │   ├── code.ts         # Code execution routes (Judge0 proxy)
 │   ├── files.ts        # File attachment routes
 │   ├── folders.ts      # Folder management routes with caching
-│   ├── metrics.ts      # Health checks and system metrics
 │   ├── notes.ts        # Note management routes
 │   └── users.ts        # User profile routes
 ├── types/

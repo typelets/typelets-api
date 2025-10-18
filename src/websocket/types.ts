@@ -12,6 +12,7 @@ export interface AuthenticatedWebSocket extends WebSocket {
   authTimeout?: ReturnType<typeof setTimeout>;
   sessionSecret?: string;
   jwtToken?: string;
+  connectionStart?: number;
 }
 
 export interface WebSocketMessage {
