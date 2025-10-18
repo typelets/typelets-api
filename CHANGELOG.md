@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/typelets/typelets-api/compare/v1.10.0...v1.11.0) (2025-10-18)
+
+
+### Features
+
+* migrate to Sentry.io monitoring, upgrade to Node 22, add folders to Swagger docs ([f2189fd](https://github.com/typelets/typelets-api/commit/f2189fde28d8995623a3a7af178ec284062d357e))
+
 # [1.10.0](https://github.com/typelets/typelets-api/compare/v1.9.0...v1.10.0) (2025-10-18)
 
 ### Features
