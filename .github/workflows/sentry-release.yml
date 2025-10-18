@@ -15,7 +15,10 @@ jobs:
           fetch-depth: 0 # Fetch all history for commit tracking
 
       - name: Set Release Version from Tag
-        run: echo "RELEASE_VERSION=${{ github.ref_name }}" >> $GITHUB_ENV
+        run: |
+          # Strip 'v' prefix from tag to match npm version format
+          VERSION=${{ github.ref_name }}
+          echo "RELEASE_VERSION=${VERSION#v}" >> $GITHUB_ENV
 
       - name: Install Sentry CLI
         run: curl -sL https://sentry.io/get-cli/ | bash

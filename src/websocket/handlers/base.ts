@@ -2,9 +2,6 @@ import { db, notes, folders } from "../../db";
 import { eq, and } from "drizzle-orm";
 import { AuthenticatedWebSocket, WebSocketMessage, ResourceOperationConfig } from "../types";
 import { ConnectionManager } from "../middleware/connection-manager";
-import { logger } from "../../lib/logger";
-
-const isDevelopment = process.env.NODE_ENV === "development";
 
 export class BaseResourceHandler {
   constructor(protected readonly _connectionManager: ConnectionManager) {}
@@ -66,16 +63,7 @@ export class BaseResourceHandler {
           );
           return;
         }
-      } catch (error) {
-        logger.error(
-          `Error authorizing ${config.resourceType} ${config.operation}`,
-          {
-            type: "websocket_error",
-            resourceType: config.resourceType,
-            operation: config.operation,
-          },
-          error instanceof Error ? error : new Error(String(error))
-        );
+      } catch {
         ws.send(
           JSON.stringify({
             type: "error",
@@ -125,17 +113,6 @@ export class BaseResourceHandler {
     }
 
     // Broadcast to user devices
-    const sentCount = this._connectionManager.broadcastToUserDevices(ws.userId, syncMessage, ws);
-
-    if (isDevelopment) {
-      logger.websocketEvent(
-        `${config.resourceType}_${config.operation}`,
-        ws.userId,
-        undefined,
-        resourceId,
-        config.resourceType,
-        `${sentCount}_devices`
-      );
-    }
+    this._connectionManager.broadcastToUserDevices(ws.userId, syncMessage, ws);
   }
 }

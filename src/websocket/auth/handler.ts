@@ -2,7 +2,6 @@ import { verifyToken } from "@clerk/backend";
 import { createHash, createHmac } from "crypto";
 import { AuthenticatedWebSocket, WebSocketMessage, WebSocketConfig } from "../types";
 import { ConnectionManager } from "../middleware/connection-manager";
-import { logger } from "../../lib/logger";
 
 interface AuthenticatedMessage {
   payload: WebSocketMessage;
@@ -42,10 +41,6 @@ export class AuthHandler {
 
     // Emergency cleanup if too many nonces (DoS protection)
     if (this.usedNonces.size > this.MAX_NONCES) {
-      logger.warn("Nonce storage exceeded limit, clearing all nonces", {
-        type: "websocket_security",
-        maxNonces: this.MAX_NONCES,
-      });
       this.usedNonces.clear();
     }
   }
@@ -128,13 +123,9 @@ export class AuthHandler {
         console.log(`User ${ws.userId} authenticated via WebSocket`);
       }
     } catch (error: unknown) {
-      logger.error(
-        "WebSocket authentication failed",
-        { type: "websocket_auth_error" },
-        error instanceof Error ? error : new Error(String(error))
-      );
-
-      const isTokenExpired = (error as Record<string, unknown>)?.reason === "token-expired";
+      const isTokenExpired =
+        (error as Record<string, unknown>)?.reason === "token-expired" ||
+        (error instanceof Error && error.message.includes("JWT is expired"));
 
       ws.send(
         JSON.stringify({
@@ -166,31 +157,20 @@ export class AuthHandler {
     // 1. Timestamp validation (5-minute window + 1 minute tolerance for clock skew)
     const messageAge = Date.now() - timestamp;
     const MAX_MESSAGE_AGE = 5 * 60 * 1000; // 5 minutes
+    // -60 seconds tolerance for clock skew
     if (messageAge > MAX_MESSAGE_AGE || messageAge < -60000) {
-      // -60 seconds tolerance for clock skew
-      logger.warn("Message rejected: timestamp out of range", {
-        type: "websocket_security",
-        messageAge,
-        maxAge: MAX_MESSAGE_AGE,
-      });
       return false;
     }
 
     // 2. Check for replay attack using nonce
     const nonceKey = `${nonce}:${timestamp}`;
     if (this.usedNonces.has(nonceKey)) {
-      logger.warn("Message rejected: nonce already used (replay attack)", {
-        type: "websocket_security",
-      });
       return false;
     }
 
     try {
       // 3. Validate required parameters
       if (!jwtToken || !userId) {
-        logger.warn("Missing JWT token or user ID for signature verification", {
-          type: "websocket_security",
-        });
         return false;
       }
 
@@ -221,25 +201,13 @@ export class AuthHandler {
       const isValidStored = storedSecretSignature === signature;
       const isValid = isValidRegenerated || isValidStored;
 
-      if (!isValid) {
-        logger.warn("Message signature verification failed", {
-          type: "websocket_security",
-          userId: userId || "unknown",
-        });
-      }
-
       if (isValid) {
         // Mark nonce as used with current timestamp
         this.usedNonces.set(nonceKey, Date.now());
       }
 
       return isValid;
-    } catch (error) {
-      logger.error(
-        "Error verifying message signature",
-        { type: "websocket_auth_error" },
-        error instanceof Error ? error : new Error(String(error))
-      );
+    } catch {
       return false;
     }
   }
@@ -258,9 +226,6 @@ export class AuthHandler {
     if (this.isAuthenticatedMessage(rawMessage)) {
       // This is an authenticated message, verify signature
       if (!ws.sessionSecret) {
-        logger.warn("Authenticated message received but no session secret available", {
-          type: "websocket_security",
-        });
         return null;
       }
 
@@ -271,10 +236,6 @@ export class AuthHandler {
         ws.userId
       );
       if (!isValid) {
-        logger.warn("Message signature verification failed", {
-          type: "websocket_security",
-          userId: ws.userId || "unknown",
-        });
         return null;
       }
 

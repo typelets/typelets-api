@@ -3,9 +3,6 @@ import { eq, and } from "drizzle-orm";
 import { AuthenticatedWebSocket, WebSocketMessage } from "../types";
 import { ConnectionManager } from "../middleware/connection-manager";
 import { BaseResourceHandler } from "./base";
-import { logger } from "../../lib/logger";
-
-const isDevelopment = process.env.NODE_ENV === "development";
 
 export class NoteHandler extends BaseResourceHandler {
   constructor(connectionManager: ConnectionManager) {
@@ -42,9 +39,9 @@ export class NoteHandler extends BaseResourceHandler {
       // Track this connection for the specific note
       this._connectionManager.addNoteConnection(message.noteId, ws);
 
-      if (isDevelopment) {
-        logger.websocketEvent("join_note", ws.userId, undefined, message.noteId, "note", "success");
-      }
+      // if (isDevelopment) {
+      //   logger.websocketEvent("join_note", ws.userId, undefined, message.noteId, "note", "success");
+      // }
 
       ws.send(
         JSON.stringify({
@@ -53,12 +50,7 @@ export class NoteHandler extends BaseResourceHandler {
           message: "Successfully joined note for real-time sync",
         })
       );
-    } catch (error) {
-      logger.error(
-        "Error joining note",
-        { type: "websocket_error", noteId: message.noteId || "unknown" },
-        error instanceof Error ? error : new Error(String(error))
-      );
+    } catch {
       ws.send(
         JSON.stringify({
           type: "error",
@@ -76,9 +68,9 @@ export class NoteHandler extends BaseResourceHandler {
     // Remove connection from note tracking
     this._connectionManager.removeNoteConnection(message.noteId, ws);
 
-    if (isDevelopment) {
-      logger.websocketEvent("leave_note", ws.userId, undefined, message.noteId, "note", "success");
-    }
+    // if (isDevelopment) {
+    //   logger.websocketEvent("leave_note", ws.userId, undefined, message.noteId, "note", "success");
+    // }
 
     ws.send(
       JSON.stringify({
@@ -140,45 +132,32 @@ export class NoteHandler extends BaseResourceHandler {
               typeof value === "string" &&
               value !== "[ENCRYPTED]"
             ) {
-              logger.warn("Note update: rejected plaintext field - must be [ENCRYPTED]", {
-                type: "security",
-                field: key,
-                noteId: message.noteId || "unknown",
-              });
+              // logger.warn("Note update: rejected plaintext field - must be [ENCRYPTED]", {
+              //   type: "security",
+              //   field: key,
+              //   noteId: message.noteId || "unknown",
+              // });
               return;
             }
 
             filteredChanges[key] = value;
           } else {
-            logger.warn("Note update: filtered out disallowed field", {
-              type: "security",
-              field: key,
-              noteId: message.noteId || "unknown",
-            });
+            // logger.warn("Note update: filtered out disallowed field", {
+            //   type: "security",
+            //   field: key,
+            //   noteId: message.noteId || "unknown",
+            // });
           }
         });
 
         if (Object.keys(filteredChanges).length > 0) {
           filteredChanges.updatedAt = new Date();
-          const updateStart = Date.now();
 
           const [updatedNote] = await db
             .update(notes)
             .set(filteredChanges)
             .where(eq(notes.id, message.noteId))
             .returning();
-
-          const updateDuration = Date.now() - updateStart;
-          if (isDevelopment) {
-            logger.websocketEvent(
-              "note_update",
-              ws.userId,
-              updateDuration,
-              message.noteId,
-              "note",
-              "success"
-            );
-          }
 
           // Broadcast the successful update to all user devices
           const syncMessage = {
@@ -190,21 +169,7 @@ export class NoteHandler extends BaseResourceHandler {
             fromUserId: ws.userId,
           };
 
-          const sentCount = this._connectionManager.broadcastToUserDevices(
-            ws.userId,
-            syncMessage,
-            ws
-          );
-          if (isDevelopment) {
-            logger.websocketEvent(
-              "note_sync_broadcast",
-              ws.userId,
-              undefined,
-              message.noteId,
-              "note",
-              `${sentCount}_devices`
-            );
-          }
+          this._connectionManager.broadcastToUserDevices(ws.userId, syncMessage, ws);
 
           // Send confirmation to the originating device
           ws.send(
@@ -216,11 +181,11 @@ export class NoteHandler extends BaseResourceHandler {
             })
           );
         } else {
-          logger.warn("Note update: no valid changes found", {
-            type: "validation",
-            noteId: message.noteId || "unknown",
-            attemptedFields: Object.keys(message.changes || {}).join(", "),
-          });
+          // logger.warn("Note update: no valid changes found", {
+          //   type: "validation",
+          //   noteId: message.noteId || "unknown",
+          //   attemptedFields: Object.keys(message.changes || {}).join(", "),
+          // });
           ws.send(
             JSON.stringify({
               type: "error",
@@ -229,12 +194,7 @@ export class NoteHandler extends BaseResourceHandler {
           );
         }
       }
-    } catch (error) {
-      logger.error(
-        "Error handling note update",
-        { type: "websocket_error", noteId: message.noteId || "unknown" },
-        error instanceof Error ? error : new Error(String(error))
-      );
+    } catch {
       ws.send(
         JSON.stringify({
           type: "error",

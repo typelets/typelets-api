@@ -11,7 +11,6 @@ import { ConnectionManager } from "./middleware/connection-manager";
 import { AuthHandler } from "./auth/handler";
 import { NoteHandler } from "./handlers/notes";
 import { FolderHandler } from "./handlers/folders";
-import { logger } from "../lib/logger";
 
 export class WebSocketManager {
   private wss: WebSocketServer;
@@ -48,21 +47,6 @@ export class WebSocketManager {
 
   private setupWebSocketServer(): void {
     this.wss.on("connection", (ws: AuthenticatedWebSocket) => {
-      const connectionStart = Date.now();
-      // Add connection start time for duration tracking
-      ws.connectionStart = connectionStart;
-
-      if (process.env.NODE_ENV === "development") {
-        logger.websocketEvent(
-          "connection",
-          "anonymous",
-          undefined,
-          undefined,
-          undefined,
-          "established"
-        );
-      }
-
       // Set authentication timeout
       this.authHandler.setupAuthTimeout(ws);
 
@@ -78,11 +62,11 @@ export class WebSocketManager {
                 message: "Message too large. Maximum size is 1MB.",
               })
             );
-            logger.warn("WebSocket message too large", {
-              type: "websocket_security",
-              messageSize: data.length,
-              userId: ws.userId || "unauthenticated",
-            });
+            // logger.warn("WebSocket message too large", {
+            //   type: "websocket_security",
+            //   messageSize: data.length,
+            //   userId: ws.userId || "unauthenticated",
+            // });
             return;
           }
 
@@ -99,9 +83,6 @@ export class WebSocketManager {
 
           rawMessage = JSON.parse(data.toString());
 
-          // Track WebSocket message processing performance
-          const messageStart = Date.now();
-
           // Process message with optional authentication verification
           const message = await this.authHandler.processIncomingMessage(ws, rawMessage);
 
@@ -116,33 +97,7 @@ export class WebSocketManager {
           }
 
           await this.handleMessage(ws, message);
-
-          const messageDuration = Date.now() - messageStart;
-
-          // Log WebSocket performance in development
-          if (process.env.NODE_ENV === "development") {
-            logger.websocketEvent(
-              message.type,
-              ws.userId || "anonymous",
-              messageDuration,
-              undefined,
-              undefined,
-              messageDuration > 2000 ? "slow" : messageDuration > 1000 ? "medium" : "fast"
-            );
-          }
-        } catch (error) {
-          logger.error(
-            "Error handling WebSocket message",
-            {
-              type: "websocket_error",
-              messageType: rawMessage?.type || "unknown",
-            },
-            error instanceof Error ? error : new Error(String(error))
-          );
-
-          // WebSocket metrics WebSocket message errors
-          // Error tracking available via console logs
-
+        } catch {
           ws.send(
             JSON.stringify({
               type: "error",
@@ -153,29 +108,11 @@ export class WebSocketManager {
       });
 
       ws.on("close", (): void => {
-        // Track connection duration
-        const connectionDuration = Date.now() - (ws.connectionStart || Date.now());
-
-        if (process.env.NODE_ENV === "development") {
-          logger.websocketEvent(
-            "disconnection",
-            ws.userId || "anonymous",
-            connectionDuration,
-            undefined,
-            undefined,
-            "closed"
-          );
-        }
-
         this.handleDisconnection(ws);
       });
 
-      ws.on("error", (error: Error): void => {
-        logger.error("WebSocket error", { type: "websocket_connection_error" }, error);
-
-        // Send WebSocket connection errors to New Relic
-        // WebSocket metrics WebSocket connection errors
-        // Error tracking available via console logs
+      ws.on("error", (): void => {
+        // WebSocket connection errors are silently handled
       });
 
       ws.send(
@@ -284,18 +221,7 @@ export class WebSocketManager {
       fromUserId: "server",
     };
 
-    const sentCount = this.connectionManager.broadcastToUserDevices(userId, syncMessage);
-
-    if (process.env.NODE_ENV === "development") {
-      logger.websocketEvent(
-        "note_update_notification",
-        userId,
-        undefined,
-        noteId,
-        "note",
-        `${sentCount}_devices`
-      );
-    }
+    this.connectionManager.broadcastToUserDevices(userId, syncMessage);
   }
 
   public notifyNoteCreated(userId: string, noteData: Record<string, unknown>): void {
@@ -306,18 +232,18 @@ export class WebSocketManager {
       fromUserId: "server",
     };
 
-    const sentCount = this.connectionManager.broadcastToUserDevices(userId, createMessage);
+    this.connectionManager.broadcastToUserDevices(userId, createMessage);
 
-    if (process.env.NODE_ENV === "development") {
-      logger.websocketEvent(
-        "note_created_notification",
-        userId,
-        undefined,
-        noteData.id as string,
-        "note",
-        `${sentCount}_devices`
-      );
-    }
+    // if (process.env.NODE_ENV === "development") {
+    //   logger.websocketEvent(
+    //     "note_created_notification",
+    //     userId,
+    //     undefined,
+    //     noteData.id as string,
+    //     "note",
+    //     `${sentCount}_devices`
+    //   );
+    // }
   }
 
   public notifyNoteDeleted(userId: string, noteId: string): void {
@@ -328,18 +254,18 @@ export class WebSocketManager {
       fromUserId: "server",
     };
 
-    const sentCount = this.connectionManager.broadcastToUserDevices(userId, deleteMessage);
+    this.connectionManager.broadcastToUserDevices(userId, deleteMessage);
 
-    if (process.env.NODE_ENV === "development") {
-      logger.websocketEvent(
-        "note_deleted_notification",
-        userId,
-        undefined,
-        noteId,
-        "note",
-        `${sentCount}_devices`
-      );
-    }
+    // if (process.env.NODE_ENV === "development") {
+    //   logger.websocketEvent(
+    //     "note_deleted_notification",
+    //     userId,
+    //     undefined,
+    //     noteId,
+    //     "note",
+    //     `${sentCount}_devices`
+    //   );
+    // }
   }
 
   public notifyFolderCreated(userId: string, folderData: Record<string, unknown>): void {
@@ -350,18 +276,18 @@ export class WebSocketManager {
       fromUserId: "server",
     };
 
-    const sentCount = this.connectionManager.broadcastToUserDevices(userId, createMessage);
+    this.connectionManager.broadcastToUserDevices(userId, createMessage);
 
-    if (process.env.NODE_ENV === "development") {
-      logger.websocketEvent(
-        "folder_created_notification",
-        userId,
-        undefined,
-        folderData.id as string,
-        "folder",
-        `${sentCount}_devices`
-      );
-    }
+    // if (process.env.NODE_ENV === "development") {
+    //   logger.websocketEvent(
+    //     "folder_created_notification",
+    //     userId,
+    //     undefined,
+    //     folderData.id as string,
+    //     "folder",
+    //     `${sentCount}_devices`
+    //   );
+    // }
   }
 
   public notifyFolderUpdated(
@@ -379,18 +305,18 @@ export class WebSocketManager {
       fromUserId: "server",
     };
 
-    const sentCount = this.connectionManager.broadcastToUserDevices(userId, updateMessage);
+    this.connectionManager.broadcastToUserDevices(userId, updateMessage);
 
-    if (process.env.NODE_ENV === "development") {
-      logger.websocketEvent(
-        "folder_updated_notification",
-        userId,
-        undefined,
-        folderId,
-        "folder",
-        `${sentCount}_devices`
-      );
-    }
+    // if (process.env.NODE_ENV === "development") {
+    //   logger.websocketEvent(
+    //     "folder_updated_notification",
+    //     userId,
+    //     undefined,
+    //     folderId,
+    //     "folder",
+    //     `${sentCount}_devices`
+    //   );
+    // }
   }
 
   public notifyFolderDeleted(userId: string, folderId: string): void {
@@ -401,18 +327,18 @@ export class WebSocketManager {
       fromUserId: "server",
     };
 
-    const sentCount = this.connectionManager.broadcastToUserDevices(userId, deleteMessage);
+    this.connectionManager.broadcastToUserDevices(userId, deleteMessage);
 
-    if (process.env.NODE_ENV === "development") {
-      logger.websocketEvent(
-        "folder_deleted_notification",
-        userId,
-        undefined,
-        folderId,
-        "folder",
-        `${sentCount}_devices`
-      );
-    }
+    // if (process.env.NODE_ENV === "development") {
+    //   logger.websocketEvent(
+    //     "folder_deleted_notification",
+    //     userId,
+    //     undefined,
+    //     folderId,
+    //     "folder",
+    //     `${sentCount}_devices`
+    //   );
+    // }
   }
 }
 

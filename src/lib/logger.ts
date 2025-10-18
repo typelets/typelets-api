@@ -16,14 +16,10 @@ const LOG_LEVELS: Record<string, LogLevel> = {
 
 class Logger {
   private environment: string;
-  private service: string;
-  private version: string;
   private currentLogLevel: LogLevel;
 
   constructor() {
     this.environment = process.env.NODE_ENV || "development";
-    this.service = "typelets-api";
-    this.version = process.env.npm_package_version || "1.0.0";
 
     // Set log level based on environment
     const logLevelName =
@@ -35,102 +31,61 @@ class Logger {
     return level.priority <= this.currentLogLevel.priority;
   }
 
-  private sendToSentry(
-    level: "error" | "warning" | "info" | "debug",
-    message: string,
-    meta: LogMetadata = {}
-  ): void {
-    const enrichedData = {
-      service: this.service,
-      environment: this.environment,
-      version: this.version,
-      ...meta,
-    };
+  private normalizePath(path: string): string {
+    // Take first two path segments and replace UUIDs/IDs with {id}
+    const segments = path.split("/").filter((s) => s.length > 0);
+    const normalized = segments
+      .slice(0, 2)
+      .map((segment) => {
+        // Replace UUIDs, numeric IDs, or other dynamic identifiers with {id}
+        if (
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(segment) ||
+          /^\d+$/.test(segment) ||
+          /^[a-zA-Z0-9_-]{20,}$/.test(segment)
+        ) {
+          return "{id}";
+        }
+        return segment;
+      })
+      .join("/");
 
-    // Add breadcrumb for context (appears in transaction/error details)
-    Sentry.addBreadcrumb({
-      level,
-      message,
-      category: (meta.type as string) || "app",
-      data: enrichedData,
-    });
-
-    // Also send as message event so it appears in Sentry Issues
-    // Only send info/warn/error as events (not debug to reduce noise)
-    if (level !== "debug") {
-      Sentry.captureMessage(message, {
-        level,
-        contexts: {
-          metadata: enrichedData,
-        },
-        tags: {
-          type: (meta.type as string) || "app",
-          service: this.service,
-        },
-      });
-    }
+    return `/${normalized}`;
   }
 
   error(message: string, meta: LogMetadata = {}, error?: Error): void {
     if (this.shouldLog(LOG_LEVELS.error)) {
-      const enrichedMeta = { ...meta };
-
       if (error) {
-        // Send exception to Sentry with context
+        // Send exception with stack trace and metadata
         Sentry.captureException(error, {
           contexts: {
-            metadata: {
-              service: this.service,
-              environment: this.environment,
-              version: this.version,
-              message,
-              ...meta,
-            },
+            metadata: meta,
           },
           tags: {
             type: (meta.type as string) || "error",
-            service: this.service,
           },
         });
       } else {
-        // No error object, send as error message
-        this.sendToSentry("error", message, enrichedMeta);
-      }
-
-      // Also send to console for development debugging
-      if (this.environment === "development") {
-        console.error(message, enrichedMeta);
+        // Send error log with metadata
+        Sentry.logger.error(message, meta);
       }
     }
   }
 
   warn(message: string, meta: LogMetadata = {}): void {
     if (this.shouldLog(LOG_LEVELS.warn)) {
-      this.sendToSentry("warning", message, meta);
-
-      if (this.environment === "development") {
-        console.warn(message, meta);
-      }
+      Sentry.logger.warn(message, meta);
     }
   }
 
   info(message: string, meta: LogMetadata = {}): void {
     if (this.shouldLog(LOG_LEVELS.info)) {
-      this.sendToSentry("info", message, meta);
-
-      if (this.environment === "development") {
-        console.log(message, meta);
-      }
+      Sentry.logger.info(message, meta);
     }
   }
 
   debug(message: string, meta: LogMetadata = {}): void {
     if (this.shouldLog(LOG_LEVELS.debug)) {
-      this.sendToSentry("debug", message, meta);
-
-      if (this.environment === "development") {
-        console.log(message, meta);
-      }
+      Sentry.logger.debug(message, meta);
     }
   }
 
@@ -142,7 +97,8 @@ class Logger {
     duration: number,
     userId?: string
   ): void {
-    this.info("HTTP request completed", {
+    const normalizedPath = this.normalizePath(path);
+    this.info(`[API] ${method} ${normalizedPath}`, {
       type: "http_request",
       method,
       path,
@@ -171,11 +127,11 @@ class Logger {
     if (resourceType) meta.resourceType = resourceType;
     if (status) meta.status = status;
 
-    this.info("WebSocket event", meta);
+    this.info(`WebSocket ${eventType}`, meta);
   }
 
   databaseQuery(operation: string, table: string, duration: number, userId?: string): void {
-    this.debug("Database query executed", {
+    this.debug(`[DB] ${operation} ${table}`, {
       type: "database_query",
       operation,
       table,
@@ -185,7 +141,8 @@ class Logger {
   }
 
   codeExecution(languageId: number, duration: number, success: boolean, userId?: string): void {
-    this.info("Code execution completed", {
+    const status = success ? "success" : "failed";
+    this.info(`Code execution ${status}`, {
       type: "code_execution",
       languageId,
       duration,
@@ -195,7 +152,7 @@ class Logger {
   }
 
   businessEvent(eventName: string, userId: string, metadata: LogMetadata = {}): void {
-    this.info("Business event", {
+    this.info(`Business event ${eventName}`, {
       type: "business_event",
       eventName,
       userId,
@@ -208,7 +165,7 @@ class Logger {
     severity: "low" | "medium" | "high" | "critical",
     details: LogMetadata
   ): void {
-    this.warn("Security event detected", {
+    this.warn(`Security event ${eventType}`, {
       type: "security_event",
       eventType,
       severity,

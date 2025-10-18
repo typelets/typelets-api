@@ -152,7 +152,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
         }
       } else {
         logger.error(
-          "Database error creating user",
+          "[DB] Error creating user",
           {
             userId: userData.id,
             error: error instanceof Error ? error.message : String(error),
