@@ -76,7 +76,7 @@ async function makeJudge0Request(endpoint: string, options: RequestInit = {}) {
         statusCode = 503;
       }
 
-      throw new HTTPException(statusCode as any, {
+      throw new HTTPException(statusCode as 500 | 503, {
         message: clientMessage,
       });
     }
@@ -156,7 +156,6 @@ const executeCodeRoute = createRoute({
 });
 
 crudRouter.openapi(executeCodeRoute, async (c) => {
-  const startTime = Date.now();
   try {
     const body = c.req.valid("json");
 

@@ -89,11 +89,21 @@ export const fileAttachments = pgTable(
   })
 );
 
+/**
+ * User relations - defines relationships between users and their data
+ * Used by Drizzle's relational query API (db.query.users.*)
+ * @important Do not remove - required for db.query.* to work properly
+ */
 export const usersRelations = relations(users, ({ many }) => ({
   folders: many(folders),
   notes: many(notes),
 }));
 
+/**
+ * Folder relations - defines hierarchical folder structure and relationships
+ * Used by Drizzle's relational query API (db.query.folders.*)
+ * @important Do not remove - required for db.query.* to work properly
+ */
 export const foldersRelations = relations(folders, ({ one, many }) => ({
   user: one(users, {
     fields: [folders.userId],
@@ -110,6 +120,11 @@ export const foldersRelations = relations(folders, ({ one, many }) => ({
   notes: many(notes),
 }));
 
+/**
+ * Note relations - defines relationships between notes, folders, users, and attachments
+ * Used by Drizzle's relational query API (db.query.notes.*)
+ * @important Do not remove - required for db.query.* to work properly
+ */
 export const notesRelations = relations(notes, ({ one, many }) => ({
   user: one(users, {
     fields: [notes.userId],
@@ -122,6 +137,11 @@ export const notesRelations = relations(notes, ({ one, many }) => ({
   attachments: many(fileAttachments),
 }));
 
+/**
+ * File attachment relations - defines relationship between attachments and notes
+ * Used by Drizzle's relational query API (db.query.fileAttachments.*)
+ * @important Do not remove - required for db.query.* to work properly
+ */
 export const fileAttachmentsRelations = relations(fileAttachments, ({ one }) => ({
   note: one(notes, {
     fields: [fileAttachments.noteId],

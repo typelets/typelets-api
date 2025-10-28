@@ -100,14 +100,14 @@ const listNotesHandler: RouteHandler<typeof listNotesRoute> = async (c) => {
     offset,
     with: {
       folder: true,
-      attachments: true,
+      // Removed attachments loading - was loading full encrypted file data unnecessarily
     },
   });
 
-  // Add attachmentCount to each note and remove full attachments array
+  // Note: attachmentCount removed for now - can be added back with efficient subquery if needed
   const notesWithAttachmentCount = userNotes.map((note) => ({
     ...note,
-    attachmentCount: note.attachments.length,
+    attachmentCount: 0, // Placeholder - will optimize this separately if needed
     attachments: undefined,
   }));
 

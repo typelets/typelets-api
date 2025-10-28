@@ -65,8 +65,11 @@ app.use("*", async (c, next) => {
     path
   );
 
+  // Skip logging for 404s (scanner noise)
+  const is404 = status === 404;
+
   // Log HTTP request with structured logging
-  if (!skipLogging) {
+  if (!skipLogging && !is404) {
     const userId = c.get("userId");
     logger.httpRequest(method, path, status, duration, userId);
   }
@@ -198,7 +201,7 @@ app.get(
 app.get("/api/openapi.json", (c) => {
   // Get OpenAPI documents from routers
   const usersDoc = (usersRouter as OpenAPIRouter).getOpenAPIDocument({
-    openapi: "3.1.0",
+    openapi: "3.0.0",
     info: {
       title: "Typelets API",
       version: VERSION,
