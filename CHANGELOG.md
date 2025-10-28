@@ -1,3 +1,10 @@
+## [1.11.9](https://github.com/typelets/typelets-api/compare/v1.11.8...v1.11.9) (2025-10-28)
+
+
+### Bug Fixes
+
+* enable database migrations for CI tests ([17c4490](https://github.com/typelets/typelets-api/commit/17c44908373e85d29190e7e8afdd16097b1a350d))
+
 ## [1.11.8](https://github.com/typelets/typelets-api/compare/v1.11.7...v1.11.8) (2025-10-28)
 
 
