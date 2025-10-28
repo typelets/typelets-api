@@ -1,3 +1,10 @@
+## [1.11.8](https://github.com/typelets/typelets-api/compare/v1.11.7...v1.11.8) (2025-10-28)
+
+
+### Bug Fixes
+
+* include drizzle migrations in git for CI tests ([fb65dca](https://github.com/typelets/typelets-api/commit/fb65dcaa54a769c243e99ce91174e337b5a05704))
+
 ## [1.11.7](https://github.com/typelets/typelets-api/compare/v1.11.6...v1.11.7) (2025-10-28)
 
 
