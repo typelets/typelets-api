@@ -1,3 +1,10 @@
+## [1.11.7](https://github.com/typelets/typelets-api/compare/v1.11.6...v1.11.7) (2025-10-28)
+
+
+### Bug Fixes
+
+* **test:** use absolute path for migrations in globalSetup ([8da367a](https://github.com/typelets/typelets-api/commit/8da367ae510aaed103faca84ce089f3fa51aa17c))
+
 ## [1.11.6](https://github.com/typelets/typelets-api/compare/v1.11.5...v1.11.6) (2025-10-28)
 
 
