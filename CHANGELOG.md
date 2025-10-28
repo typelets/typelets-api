@@ -1,3 +1,11 @@
+## [1.11.10](https://github.com/typelets/typelets-api/compare/v1.11.9...v1.11.10) (2025-10-28)
+
+
+### Bug Fixes
+
+* install @jest/globals to fix CI test compilation ([6c5acec](https://github.com/typelets/typelets-api/commit/6c5acece8985382823360f331632a8787a6f3a29))
+* install @jest/globals to fix CI test compilation ([1e7fcea](https://github.com/typelets/typelets-api/commit/1e7fceae23cfe379891bc3447d3583c1e844a912))
+
 ## [1.11.9](https://github.com/typelets/typelets-api/compare/v1.11.8...v1.11.9) (2025-10-28)
 
 
