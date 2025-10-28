@@ -1,3 +1,10 @@
+## [1.11.6](https://github.com/typelets/typelets-api/compare/v1.11.5...v1.11.6) (2025-10-28)
+
+
+### Bug Fixes
+
+* optimize notes API performance and add test infrastructure ([ab8e902](https://github.com/typelets/typelets-api/commit/ab8e90277fb71194d25164196341ce2b6d56d7f7))
+
 ## [1.11.5](https://github.com/typelets/typelets-api/compare/v1.11.4...v1.11.5) (2025-10-18)
 
 ### Bug Fixes
