@@ -1,3 +1,10 @@
+## [1.11.11](https://github.com/typelets/typelets-api/compare/v1.11.10...v1.11.11) (2025-10-29)
+
+
+### Bug Fixes
+
+* expand allowed file upload types to support office docs and Apple formats ([f3e3cea](https://github.com/typelets/typelets-api/commit/f3e3cea9ef485cdea72af1cb3a6ca534f943a111))
+
 ## [1.11.10](https://github.com/typelets/typelets-api/compare/v1.11.9...v1.11.10) (2025-10-28)
 
 
