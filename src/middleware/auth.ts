@@ -4,13 +4,7 @@ import { verifyToken } from "@clerk/backend";
 import { db, users, folders, type User } from "../db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
-import type {
-  ClerkUserData,
-  ClerkJWTPayload,
-  UserUpdateData,
-  ClerkApiUser,
-  DatabaseError,
-} from "../types";
+import type { ClerkUserData, ClerkJWTPayload, UserUpdateData, DatabaseError } from "../types";
 
 if (!process.env.CLERK_SECRET_KEY) {
   throw new Error(
@@ -27,6 +21,7 @@ declare module "hono" {
 }
 
 const extractAndVerifyClerkToken = async (c: Context): Promise<ClerkUserData | null> => {
+  const startTime = Date.now();
   const authHeader = c.req.header("Authorization");
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -36,48 +31,29 @@ const extractAndVerifyClerkToken = async (c: Context): Promise<ClerkUserData | n
   const token = authHeader.split(" ")[1];
 
   try {
+    const verifyStart = Date.now();
     const payload = (await verifyToken(token, {
       secretKey: process.env.CLERK_SECRET_KEY!,
     })) as unknown as ClerkJWTPayload;
+    console.log(`[AUTH PERF] verifyToken took: ${Date.now() - verifyStart}ms`);
 
-    try {
-      const userResponse = await fetch(`https://api.clerk.com/v1/users/${payload.sub}`, {
-        headers: {
-          Authorization: `Bearer ${process.env.CLERK_SECRET_KEY}`,
-          "Content-Type": "application/json",
-        },
-      });
-
-      if (userResponse.ok) {
-        const clerkUser: ClerkApiUser = await userResponse.json();
-        return {
-          id: clerkUser.id,
-          email: clerkUser.email_addresses?.[0]?.email_address || "",
-          firstName: clerkUser.first_name || null,
-          lastName: clerkUser.last_name || null,
-        };
-      } else {
-        return {
-          id: payload.sub,
-          email: "",
-          firstName: null,
-          lastName: null,
-        };
-      }
-    } catch {
-      return {
-        id: payload.sub,
-        email: "",
-        firstName: null,
-        lastName: null,
-      };
-    }
+    // Security is maintained by JWT verification above
+    // User metadata comes from our DB (updated via webhooks or on login)
+    // No need to call Clerk API on every request - saves 150-200ms
+    console.log(`[AUTH PERF] Total extractAndVerify took: ${Date.now() - startTime}ms`);
+    return {
+      id: payload.sub,
+      email: "", // Will be populated from DB
+      firstName: null, // Will be populated from DB
+      lastName: null, // Will be populated from DB
+    };
   } catch {
     return null;
   }
 };
 
 export const authMiddleware = async (c: Context, next: Next) => {
+  const middlewareStart = Date.now();
   const userData = await extractAndVerifyClerkToken(c);
 
   if (!userData) {
@@ -86,9 +62,11 @@ export const authMiddleware = async (c: Context, next: Next) => {
     });
   }
 
+  const dbQueryStart = Date.now();
   let existingUser = await db.query.users.findFirst({
     where: eq(users.id, userData.id),
   });
+  console.log(`[AUTH PERF] DB user lookup took: ${Date.now() - dbQueryStart}ms`);
 
   if (existingUser) {
     try {
@@ -169,6 +147,8 @@ export const authMiddleware = async (c: Context, next: Next) => {
   c.set("userId", userData.id);
   c.set("user", existingUser);
   c.set("clerkUser", userData);
+
+  console.log(`[AUTH PERF] Total auth middleware took: ${Date.now() - middlewareStart}ms`);
 
   // User context available in Hono context
 

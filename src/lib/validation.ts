@@ -105,15 +105,42 @@ export const foldersQuerySchema = z
 
 // Allowed MIME types for security
 const allowedMimeTypes = [
+  // Images
   "image/jpeg",
+  "image/jpg",
   "image/png",
   "image/gif",
   "image/webp",
+  "image/svg+xml",
+  "image/bmp",
+  "image/tiff",
+  "image/avif",
+  // Apple formats (iPhone/iPad photos)
+  "image/heic",
+  "image/heif",
+  "image/heic-sequence", // Live Photos
+  "image/heif-sequence",
+  // Documents
   "application/pdf",
   "text/plain",
   "text/markdown",
   "application/json",
   "text/csv",
+  // Microsoft Office
+  "application/msword", // .doc
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+  "application/vnd.ms-excel", // .xls
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  "application/vnd.ms-powerpoint", // .ppt
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+  // Archives
+  "application/zip",
+  "application/x-rar-compressed",
+  "application/x-7z-compressed",
+  // Other common formats
+  "text/html",
+  "application/xml",
+  "text/xml",
 ] as const;
 
 export const uploadFileSchema = z.object({
