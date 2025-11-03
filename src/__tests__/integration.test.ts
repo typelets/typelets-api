@@ -170,4 +170,67 @@ describe("Test Infrastructure Integration", () => {
       expect(await countRows("notes")).toBe(0);
     });
   });
+
+  describe("Note Types", () => {
+    it("should create a note with default type 'note'", async () => {
+      const user = await createTestUser();
+      const note = await createTestNote(user.id, null);
+
+      expect(note.type).toBe("note");
+    });
+
+    it("should create a diagram note when type is specified", async () => {
+      const user = await createTestUser();
+      const note = await createTestNote(user.id, null, {
+        type: "diagram",
+        title: "UML Diagram",
+      });
+
+      expect(note.type).toBe("diagram");
+      expect(note.title).toBe("UML Diagram");
+    });
+
+    it("should query notes by type", async () => {
+      const user = await createTestUser();
+      const folder = await createTestFolder(user.id);
+
+      // Create mixed note types
+      await createTestNote(user.id, folder.id, { type: "note", title: "Regular Note 1" });
+      await createTestNote(user.id, folder.id, { type: "diagram", title: "Diagram 1" });
+      await createTestNote(user.id, folder.id, { type: "note", title: "Regular Note 2" });
+      await createTestNote(user.id, folder.id, { type: "diagram", title: "Diagram 2" });
+
+      // Query only diagrams
+      const diagrams = await db.query.notes.findMany({
+        where: eq(notes.type, "diagram"),
+      });
+
+      expect(diagrams).toHaveLength(2);
+      expect(diagrams.every((n) => n.type === "diagram")).toBe(true);
+
+      // Query only regular notes
+      const regularNotes = await db.query.notes.findMany({
+        where: eq(notes.type, "note"),
+      });
+
+      expect(regularNotes).toHaveLength(2);
+      expect(regularNotes.every((n) => n.type === "note")).toBe(true);
+    });
+
+    it("should update note type from note to diagram", async () => {
+      const user = await createTestUser();
+      const note = await createTestNote(user.id, null, { type: "note" });
+
+      expect(note.type).toBe("note");
+
+      // Update to diagram
+      const [updatedNote] = await db
+        .update(notes)
+        .set({ type: "diagram" })
+        .where(eq(notes.id, note.id))
+        .returning();
+
+      expect(updatedNote.type).toBe("diagram");
+    });
+  });
 });

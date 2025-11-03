@@ -305,6 +305,9 @@ export const noteSchema = z
       .openapi({ example: "123e4567-e89b-12d3-a456-426614174000", description: "Folder ID" }),
     title: z.string().openapi({ example: "[ENCRYPTED]", description: "Encrypted note title" }),
     content: z.string().openapi({ example: "[ENCRYPTED]", description: "Encrypted note content" }),
+    type: z
+      .enum(["note", "diagram"])
+      .openapi({ example: "note", description: "Note type: 'note' or 'diagram'" }),
     encryptedTitle: z
       .string()
       .nullable()
@@ -372,6 +375,10 @@ export const createNoteRequestSchema = z
       .max(20)
       .optional()
       .openapi({ example: ["work"], description: "Up to 20 tags, max 50 chars each" }),
+    type: z.enum(["note", "diagram"]).default("note").optional().openapi({
+      example: "note",
+      description: "Note type: 'note' or 'diagram' (defaults to 'note' if not specified)",
+    }),
     encryptedTitle: z
       .string()
       .optional()
@@ -411,6 +418,10 @@ export const updateNoteRequestSchema = z
       .max(20)
       .optional()
       .openapi({ example: ["work"], description: "Up to 20 tags" }),
+    type: z
+      .enum(["note", "diagram"])
+      .optional()
+      .openapi({ example: "note", description: "Note type: 'note' or 'diagram'" }),
     encryptedTitle: z
       .string()
       .optional()
@@ -469,6 +480,14 @@ export const notesQueryParamsSchema = z
         param: { name: "hidden", in: "query" },
         example: "false",
         description: "Filter by hidden status",
+      }),
+    type: z
+      .enum(["note", "diagram"])
+      .optional()
+      .openapi({
+        param: { name: "type", in: "query" },
+        example: "diagram",
+        description: "Filter by note type",
       }),
     search: z
       .string()

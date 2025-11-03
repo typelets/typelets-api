@@ -45,6 +45,7 @@ export const createNoteSchema = z.object({
   ),
   starred: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
+  type: z.enum(["note", "diagram"]).default("note").optional(),
 
   encryptedTitle: z.string().optional(),
   encryptedContent: z.string().optional(),
@@ -70,6 +71,7 @@ export const updateNoteSchema = z.object({
   deleted: z.boolean().optional(),
   hidden: z.boolean().optional(),
   tags: z.array(z.string().max(50)).max(20).optional(),
+  type: z.enum(["note", "diagram"]).optional(),
 
   encryptedTitle: z.string().optional(),
   encryptedContent: z.string().optional(),
@@ -89,6 +91,7 @@ export const notesQuerySchema = z
     archived: z.coerce.boolean().optional(),
     deleted: z.coerce.boolean().optional(),
     hidden: z.coerce.boolean().optional(),
+    type: z.enum(["note", "diagram"]).optional(),
     search: z
       .string()
       .max(100)
