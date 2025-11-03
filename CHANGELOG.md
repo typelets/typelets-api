@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/typelets/typelets-api/compare/v1.11.11...v1.12.0) (2025-11-03)
+
+
+### Features
+
+* add diagram type support with filtering and tests ([d47c0d4](https://github.com/typelets/typelets-api/commit/d47c0d448e3c149e50c5049f93f80e4635161ac5))
+
 ## [1.11.11](https://github.com/typelets/typelets-api/compare/v1.11.10...v1.11.11) (2025-10-29)
 
 
