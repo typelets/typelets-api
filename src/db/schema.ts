@@ -44,6 +44,9 @@ export const notes = pgTable(
 
     title: text("title").notNull(),
     content: text("content").default(""),
+    type: text("type", { enum: ["note", "diagram"] })
+      .default("note")
+      .notNull(),
 
     encryptedTitle: text("encrypted_title"),
     encryptedContent: text("encrypted_content"),
@@ -64,6 +67,7 @@ export const notes = pgTable(
     userIdIdx: index("idx_notes_user_id").on(table.userId),
     folderIdIdx: index("idx_notes_folder_id").on(table.folderId),
     userUpdatedIdx: index("idx_notes_user_updated").on(table.userId, table.updatedAt.desc()),
+    typeIdx: index("idx_notes_type").on(table.type),
   })
 );
 

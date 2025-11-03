@@ -76,6 +76,10 @@ const listNotesHandler: RouteHandler<typeof listNotesRoute> = async (c) => {
     conditions.push(eq(notes.hidden, hidden));
   }
 
+  if (query.type !== undefined) {
+    conditions.push(eq(notes.type, query.type));
+  }
+
   if (query.search) {
     const escapedSearch = query.search
       .replace(/\\/g, "\\\\")
@@ -282,6 +286,7 @@ const createNoteHandler: RouteHandler<typeof createNoteRoute> = async (c) => {
     folderId?: string | null;
     starred?: boolean;
     tags?: string[];
+    type?: "note" | "diagram";
     encryptedTitle?: string;
     encryptedContent?: string;
     iv?: string;
