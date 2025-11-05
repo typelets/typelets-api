@@ -259,6 +259,9 @@ crudRouter.openapi(executeCodeRoute, async (c) => {
     const result = await response.json();
 
     // Convert Piston response to Judge0-compatible format for frontend
+    // Generate a fake token for backwards compatibility (execution already complete)
+    const fakeToken = `piston-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
     const formattedResponse = {
       stdout: result.run?.stdout || "",
       stderr: result.run?.stderr || "",
@@ -270,7 +273,7 @@ crudRouter.openapi(executeCodeRoute, async (c) => {
       },
       time: result.run?.cpu_time ? String(result.run.cpu_time) : "0",
       memory: result.run?.memory || null,
-      token: null, // No token needed for synchronous execution
+      token: fakeToken, // Fake token for backwards compatibility
     };
 
     return c.json(formattedResponse);
@@ -323,21 +326,24 @@ const getStatusRoute = createRoute({
 });
 
 crudRouter.openapi(getStatusRoute, async (c) => {
-  // Return 410 Gone to indicate this endpoint is deprecated
+  // For backwards compatibility: return a "completed" response
+  // Since Piston is synchronous, all results were already returned from /execute
+  // This endpoint is only called if frontend polls the token
   return c.json(
     {
       stdout: "",
-      stderr: "This endpoint is deprecated. Piston executes code synchronously.",
+      stderr: "Results already returned from /execute endpoint. Piston executes synchronously.",
       compile_output: null,
-      message: "Use POST /api/code/execute for immediate results",
+      message: "All results were included in the initial /execute response",
       status: {
-        id: 6,
-        description: "Deprecated",
+        id: 3,
+        description: "Accepted",
       },
       time: "0",
       memory: null,
+      token: c.req.param("token"),
     },
-    410
+    200
   );
 });
 
