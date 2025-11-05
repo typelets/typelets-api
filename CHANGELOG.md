@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/typelets/typelets-api/compare/v1.13.0...v1.14.0) (2025-11-05)
+
+
+### Features
+
+* add code note type and migrate to Upstash Redis + Piston ([01d5b32](https://github.com/typelets/typelets-api/commit/01d5b324eb297c20182d3a4337488a2b5297b144))
+
 # [1.13.0](https://github.com/typelets/typelets-api/compare/v1.12.0...v1.13.0) (2025-11-05)
 
 
