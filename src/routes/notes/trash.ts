@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { db, notes } from "../../db";
 import { eq, and, count } from "drizzle-orm";
 import { emptyTrashResponseSchema } from "../../lib/openapi-schemas";
+import { deleteCachePattern } from "../../lib/cache";
 
 const trashRouter = new OpenAPIHono();
 
@@ -43,6 +44,9 @@ trashRouter.openapi(emptyTrashRoute, async (c) => {
       .where(and(eq(notes.userId, userId), eq(notes.deleted, true)));
 
     await db.delete(notes).where(and(eq(notes.userId, userId), eq(notes.deleted, true)));
+
+    // Invalidate all note counts cache for this user (global and all folders)
+    await deleteCachePattern(`notes:${userId}:*`);
 
     return c.json(
       {
