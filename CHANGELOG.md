@@ -1,3 +1,11 @@
+## [1.14.1](https://github.com/typelets/typelets-api/compare/v1.14.0...v1.14.1) (2025-11-05)
+
+
+### Bug Fixes
+
+* return fake token from Piston for frontend compatibility ([e216257](https://github.com/typelets/typelets-api/commit/e2162571ffdccf59f5983b330a05c2c3b92b517e))
+* return fake token from Piston for frontend compatibility ([2df254d](https://github.com/typelets/typelets-api/commit/2df254d5ba20a4756e5a12ca2f485b1337c55cf8))
+
 # [1.14.0](https://github.com/typelets/typelets-api/compare/v1.13.0...v1.14.0) (2025-11-05)
 
 
