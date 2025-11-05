@@ -45,11 +45,11 @@
     "@sentry/node": "^10.20.0",
     "@sentry/profiling-node": "^10.20.0",
     "@types/ws": "^8.18.1",
+    "@upstash/redis": "^1.35.6",
     "dotenv": "^17.0.1",
     "dotenv-flow": "^4.1.0",
     "drizzle-orm": "^0.44.2",
     "hono": "^4.8.3",
-    "ioredis": "^5.8.1",
     "postgres": "^3.4.7",
     "ws": "^8.18.3",
     "zod": "^4.1.12"

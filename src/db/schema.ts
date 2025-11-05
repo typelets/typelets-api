@@ -44,7 +44,7 @@ export const notes = pgTable(
 
     title: text("title").notNull(),
     content: text("content").default(""),
-    type: text("type", { enum: ["note", "diagram"] })
+    type: text("type", { enum: ["note", "diagram", "code"] })
       .default("note")
       .notNull(),
 
