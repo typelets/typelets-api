@@ -286,7 +286,7 @@ const createNoteHandler: RouteHandler<typeof createNoteRoute> = async (c) => {
     folderId?: string | null;
     starred?: boolean;
     tags?: string[];
-    type?: "note" | "diagram";
+    type?: "note" | "diagram" | "code";
     encryptedTitle?: string;
     encryptedContent?: string;
     iv?: string;

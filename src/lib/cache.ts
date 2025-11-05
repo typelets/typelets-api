@@ -1,54 +1,28 @@
-import { Cluster, ClusterOptions } from "ioredis";
+import { Redis } from "@upstash/redis";
 import { logger } from "./logger";
 import { db, folders } from "../db";
 import { eq } from "drizzle-orm";
 import * as Sentry from "@sentry/node";
 
-let client: Cluster | null = null;
+let client: Redis | null = null;
 
-export function getCacheClient(): Cluster | null {
-  if (!process.env.VALKEY_HOST) {
-    logger.warn("VALKEY_HOST not configured, caching disabled");
+export function getCacheClient(): Redis | null {
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    logger.warn("Upstash Redis not configured, caching disabled");
     return null;
   }
 
   if (!client) {
     try {
-      const clusterOptions: ClusterOptions = {
-        dnsLookup: (address, callback) => callback(null, address),
-        redisOptions: {
-          tls: process.env.NODE_ENV === "production" ? {} : undefined,
-          connectTimeout: 5000,
-        },
-        clusterRetryStrategy: (times) => {
-          if (times > 3) {
-            logger.error("Valkey connection failed after 3 retries");
-            return null;
-          }
-          return Math.min(times * 200, 2000);
-        },
-      };
-
-      client = new Cluster(
-        [
-          {
-            host: process.env.VALKEY_HOST,
-            port: parseInt(process.env.VALKEY_PORT || "6379"),
-          },
-        ],
-        clusterOptions
-      );
-
-      client.on("error", (err) => {
-        logger.error("Valkey client error", { error: err.message }, err);
+      client = new Redis({
+        url: process.env.UPSTASH_REDIS_REST_URL,
+        token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
 
-      client.on("connect", () => {
-        logger.info("Connected to Valkey cluster");
-      });
+      logger.info("Connected to Upstash Redis");
     } catch (error) {
       logger.error(
-        "Failed to initialize Valkey client",
+        "Failed to initialize Upstash Redis client",
         {
           error: error instanceof Error ? error.message : String(error),
         },
@@ -63,9 +37,9 @@ export function getCacheClient(): Cluster | null {
 
 export async function closeCache(): Promise<void> {
   if (client) {
-    await client.disconnect();
+    // Upstash REST client doesn't need explicit disconnection
     client = null;
-    logger.info("Valkey connection closed");
+    logger.info("Upstash Redis connection closed");
   }
 }
 
@@ -85,20 +59,20 @@ export async function getCache<T>(key: string): Promise<T | null> {
     async (span) => {
       const startTime = Date.now();
       try {
-        const data = await cache.get(key);
+        const data = await cache.get<string>(key);
         const duration = Date.now() - startTime;
         const hit = data !== null;
 
         // Set Sentry span attributes
         span.setAttribute("cache.hit", hit);
         if (data) {
-          span.setAttribute("cache.item_size", data.length);
+          span.setAttribute("cache.item_size", JSON.stringify(data).length);
         }
 
         // Log cache operation with metrics
         logger.cacheOperation("get", key, hit, duration);
 
-        return data ? JSON.parse(data) : null;
+        return data ? (JSON.parse(data) as T) : null;
       } catch (error) {
         span.setStatus({ code: 2, message: "error" }); // SPAN_STATUS_ERROR
         logger.cacheError("get", key, error instanceof Error ? error : new Error(String(error)));
@@ -164,16 +138,12 @@ export async function deleteCache(...keys: string[]): Promise<void> {
     async (span) => {
       const startTime = Date.now();
       try {
-        // In cluster mode, keys may hash to different slots
-        // Use pipeline to delete individually (more efficient than separate awaits)
+        // Delete keys individually (Upstash REST API)
         if (keys.length === 1) {
           await cache.del(keys[0]);
         } else {
-          const pipeline = cache.pipeline();
-          for (const key of keys) {
-            pipeline.del(key);
-          }
-          await pipeline.exec();
+          // Use Promise.all for parallel deletion
+          await Promise.all(keys.map((key) => cache.del(key)));
         }
         const duration = Date.now() - startTime;
 
@@ -197,36 +167,31 @@ export async function deleteCachePattern(pattern: string): Promise<void> {
 
   try {
     const keys: string[] = [];
+    let cursor = "0";
 
-    // In cluster mode, we need to scan all master nodes
-    const nodes = cache.nodes("master");
+    // Use SCAN to find keys matching pattern
+    do {
+      // Upstash REST API supports SCAN
+      const result = await cache.scan(Number(cursor), {
+        match: pattern,
+        count: 100,
+      });
 
-    for (const node of nodes) {
-      let cursor = "0";
-      do {
-        // Scan each master node individually
-        const result = await node.scan(cursor, "MATCH", pattern, "COUNT", 100);
-        cursor = result[0];
-        keys.push(...result[1]);
-      } while (cursor !== "0");
-    }
+      cursor = String(result[0]);
+      keys.push(...result[1]);
+    } while (cursor !== "0");
 
     if (keys.length > 0) {
-      // Delete in batches using pipeline (cluster mode compatible)
+      // Delete in batches of 100
       const batchSize = 100;
       for (let i = 0; i < keys.length; i += batchSize) {
         const batch = keys.slice(i, i + batchSize);
-        const pipeline = cache.pipeline();
-        for (const key of batch) {
-          pipeline.del(key);
-        }
-        await pipeline.exec();
+        await Promise.all(batch.map((key) => cache.del(key)));
       }
 
       logger.info(`Deleted cache keys matching pattern`, {
         pattern,
         keyCount: keys.length,
-        nodeCount: nodes.length,
       });
     }
   } catch (error) {
@@ -295,7 +260,7 @@ export async function invalidateNoteCounts(userId: string, folderId: string | nu
       }
     }
 
-    // Delete all cache keys using pipeline for cluster compatibility
+    // Delete all cache keys
     if (cacheKeys.length > 0) {
       await deleteCache(...cacheKeys);
       logger.debug("Invalidated note counts cache", {

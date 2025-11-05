@@ -232,5 +232,45 @@ describe("Test Infrastructure Integration", () => {
 
       expect(updatedNote.type).toBe("diagram");
     });
+
+    it("should create a code note when type is specified", async () => {
+      const user = await createTestUser();
+      const note = await createTestNote(user.id, null, {
+        type: "code",
+        title: "Code Snippet",
+        content: '{"language":"javascript","code":"console.log(\'Hello\');"}',
+      });
+
+      expect(note.type).toBe("code");
+      expect(note.title).toBe("Code Snippet");
+      expect(note.content).toContain("javascript");
+    });
+
+    it("should query notes by code type", async () => {
+      const user = await createTestUser();
+      const folder = await createTestFolder(user.id);
+
+      // Create mixed note types including code
+      await createTestNote(user.id, folder.id, { type: "note", title: "Regular Note" });
+      await createTestNote(user.id, folder.id, { type: "diagram", title: "Diagram" });
+      await createTestNote(user.id, folder.id, {
+        type: "code",
+        title: "Code 1",
+        content: '{"language":"python"}',
+      });
+      await createTestNote(user.id, folder.id, {
+        type: "code",
+        title: "Code 2",
+        content: '{"language":"typescript"}',
+      });
+
+      // Query only code notes
+      const codeNotes = await db.query.notes.findMany({
+        where: eq(notes.type, "code"),
+      });
+
+      expect(codeNotes).toHaveLength(2);
+      expect(codeNotes.every((n) => n.type === "code")).toBe(true);
+    });
   });
 });
