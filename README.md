@@ -58,9 +58,10 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - 🔄 **Real-time Sync** via WebSockets for multi-device support
 - ⚡ **Fast & Type-Safe** with TypeScript and Hono
 - 🐘 **PostgreSQL** with Drizzle ORM
-- 🚀 **Valkey/Redis Caching** for high-performance data access with cluster support
+- 🚀 **Upstash Redis Caching** for high-performance data access with REST API
 - 📊 **Error Tracking & Monitoring** with Sentry.io for observability and performance monitoring
-- 💻 **Code Execution** via secure Judge0 API proxy
+- 💻 **Code Execution** via self-hosted Piston for 14+ programming languages
+- 🎨 **Multiple Note Types** supporting standard notes, diagrams, and executable code
 - 🛡️ **Comprehensive Rate Limiting** for HTTP, WebSocket, file uploads, and code execution
 - 🏥 **Health Checks** with detailed system status and readiness probes
 - 📈 **Structured Logging** with automatic event tracking and error capture
@@ -70,7 +71,8 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - **Runtime**: Node.js 22+ (LTS recommended)
 - **Framework**: [Hono](https://hono.dev/) - Fast, lightweight web framework
 - **Database**: PostgreSQL with [Drizzle ORM](https://orm.drizzle.team/)
-- **Cache**: Valkey/Redis Cluster for high-performance caching
+- **Cache**: [Upstash Redis](https://upstash.com/) - Serverless Redis with REST API
+- **Code Execution**: Self-hosted [Piston](https://github.com/engineer-man/piston) - Secure code execution engine
 - **Authentication**: [Clerk](https://clerk.com/)
 - **Validation**: [Zod](https://zod.dev/)
 - **Monitoring**: [Sentry.io](https://sentry.io/) for error tracking and performance monitoring
@@ -83,9 +85,9 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - pnpm 9.15.0+
 - PostgreSQL database (local installation or Docker)
 - Clerk account for authentication ([sign up here](https://dashboard.clerk.com))
-- Valkey/Redis cluster for caching (optional - improves performance)
+- Upstash Redis account for caching (optional - [sign up here](https://upstash.com/))
+- Self-hosted Piston instance for code execution (optional - [see setup](https://github.com/engineer-man/piston))
 - Sentry.io account for monitoring (optional - [sign up here](https://sentry.io/signup/))
-- Judge0 API key for code execution (optional - [get from RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce))
 
 ## Local Development Setup
 
@@ -120,14 +122,18 @@ cp .env.example .env
 4. **Configure environment variables:**
    - Create a free account at [Clerk Dashboard](https://dashboard.clerk.com)
    - Create a new application
-   - (Optional) Get Judge0 API key from [RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce)
+   - (Optional) Set up [Upstash Redis](https://upstash.com/) for caching
+   - (Optional) Deploy [Piston](https://github.com/engineer-man/piston) for code execution
    - Update `.env` with your settings:
 
    ```env
    CLERK_SECRET_KEY=sk_test_your_actual_clerk_secret_key_from_dashboard
    CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+   # Optional: For caching (improves performance)
+   UPSTASH_REDIS_REST_URL=https://your-instance.upstash.io
+   UPSTASH_REDIS_REST_TOKEN=your_token_here
    # Optional: For code execution features
-   JUDGE0_API_KEY=your_judge0_rapidapi_key_here
+   PISTON_API_URL=http://your-piston-instance:2000/api/v2
    ```
 
 5. **Set up database schema:**
@@ -207,9 +213,9 @@ The API provides comprehensive REST endpoints for:
 
 - **Users** - Profile management and account deletion
 - **Folders** - Hierarchical folder organization with nested support
-- **Notes** - Full CRUD with encryption support, pagination, filtering, and search
+- **Notes** - Full CRUD with encryption support, pagination, filtering, and search (supports note, diagram, and code types)
 - **File Attachments** - Encrypted file uploads and downloads
-- **Code Execution** - Secure Judge0 API proxy for running code in multiple languages
+- **Code Execution** - Self-hosted Piston for running code in 14+ languages (JavaScript, TypeScript, Python, Java, C++, C, C#, Go, Rust, PHP, Ruby, Kotlin, Swift, Bash)
 - **Health Checks** - System health checks and status monitoring
 
 ### Public Endpoints
@@ -256,7 +262,7 @@ The application uses the following main tables:
 
 - `users` - User profiles synced from Clerk
 - `folders` - Hierarchical folder organization
-- `notes` - Encrypted notes with metadata
+- `notes` - Encrypted notes with metadata (supports `note`, `diagram`, and `code` types)
 - `file_attachments` - Encrypted file attachments
 
 ## Security Features
@@ -280,8 +286,8 @@ The application uses the following main tables:
 | `PORT`                         | Server port                                      | No       | 3000                             |
 | `NODE_ENV`                     | Environment (development/production)             | No       | development                      |
 | **Caching (Optional)**         |                                                  |          |                                  |
-| `VALKEY_HOST`                  | Valkey/Redis cluster hostname                    | No       | -                                |
-| `VALKEY_PORT`                  | Valkey/Redis cluster port                        | No       | 6379                             |
+| `UPSTASH_REDIS_REST_URL`       | Upstash Redis REST API URL                       | No       | -                                |
+| `UPSTASH_REDIS_REST_TOKEN`     | Upstash Redis REST API token                     | No       | -                                |
 | **Monitoring (Optional)**      |                                                  |          |                                  |
 | `SENTRY_DSN`                   | Sentry.io DSN for error tracking                 | No       | -                                |
 | **Rate Limiting**              |                                                  |          |                                  |
@@ -300,9 +306,7 @@ The application uses the following main tables:
 | `FREE_TIER_STORAGE_GB`         | Free tier storage limit in GB                    | No       | 1                                |
 | `FREE_TIER_NOTE_LIMIT`         | Free tier note count limit                       | No       | 100                              |
 | **Code Execution (Optional)**  |                                                  |          |                                  |
-| `JUDGE0_API_KEY`               | Judge0 API key for code execution                | No\*     | -                                |
-| `JUDGE0_API_URL`               | Judge0 API base URL                              | No       | https://judge0-ce.p.rapidapi.com |
-| `JUDGE0_API_HOST`              | Judge0 API host header                           | No       | judge0-ce.p.rapidapi.com         |
+| `PISTON_API_URL`               | Piston API URL for code execution                | No\*     | -                                |
 
 \*Required only for code execution features
 
@@ -412,7 +416,7 @@ src/
 │   ├── index.ts        # Database connection
 │   └── schema.ts       # Database schema definitions
 ├── lib/
-│   ├── cache.ts        # Valkey/Redis cluster caching layer
+│   ├── cache.ts        # Upstash Redis caching layer with REST API
 │   ├── cache-keys.ts   # Centralized cache key patterns and TTL values
 │   ├── logger.ts       # Structured logging with automatic error capture
 │   └── validation.ts   # Zod validation schemas
@@ -422,7 +426,7 @@ src/
 │   ├── security.ts     # Security headers middleware
 │   └── usage.ts        # Storage and usage limit enforcement
 ├── routes/
-│   ├── code.ts         # Code execution routes (Judge0 proxy)
+│   ├── code.ts         # Code execution routes (Piston integration)
 │   ├── files.ts        # File attachment routes
 │   ├── folders.ts      # Folder management routes with caching
 │   ├── notes.ts        # Note management routes
