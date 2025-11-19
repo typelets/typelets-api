@@ -4,7 +4,7 @@ import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
 import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
-import { Resource } from "@opentelemetry/resources";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
 
 // Only initialize OpenTelemetry in production (unless OTEL_ENABLED is explicitly set to "true")
@@ -19,7 +19,7 @@ if (shouldEnableOtel) {
   const environment = process.env.NODE_ENV || "development";
 
   // Create resource with service information
-  const resource = new Resource({
+  const resource = resourceFromAttributes({
     [ATTR_SERVICE_NAME]: serviceName,
     [ATTR_SERVICE_VERSION]: serviceVersion,
     environment: environment, // Tag all data with environment
