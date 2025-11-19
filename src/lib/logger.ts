@@ -1,4 +1,5 @@
-import { trace, context, logs, SeverityNumber } from "@opentelemetry/api";
+import { trace, context } from "@opentelemetry/api";
+import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
 interface LogLevel {
   level: string;
