@@ -4,7 +4,6 @@ import { eq, and, isNull, sql } from "drizzle-orm";
 import { getCache, setCache } from "../../lib/cache";
 import { CacheKeys, CacheTTL } from "../../lib/cache-keys";
 import { z } from "@hono/zod-openapi";
-import * as Sentry from "@sentry/node";
 
 const countsRouter = new OpenAPIHono();
 
@@ -96,96 +95,81 @@ async function getCountsForFolders(
 
 // Cache warming function - call this after note/folder operations to keep cache fresh
 export async function warmNotesCountsCache(userId: string): Promise<void> {
-  const span = Sentry.startInactiveSpan({
-    name: "warmNotesCountsCache",
-    op: "cache.warm",
+  // Get total counts for all user's notes using single query
+  const totalCountsResult = await db.execute<{
+    all_count: string;
+    starred_count: string;
+    archived_count: string;
+    trash_count: string;
+  }>(sql`
+    SELECT
+      COUNT(*) FILTER (WHERE deleted = false AND archived = false) as all_count,
+      COUNT(*) FILTER (WHERE starred = true AND deleted = false AND archived = false) as starred_count,
+      COUNT(*) FILTER (WHERE archived = true AND deleted = false) as archived_count,
+      COUNT(*) FILTER (WHERE deleted = true) as trash_count
+    FROM notes
+    WHERE user_id = ${userId}
+  `);
+
+  const totalCountsRows = totalCountsResult as unknown as {
+    all_count: string;
+    starred_count: string;
+    archived_count: string;
+    trash_count: string;
+  }[];
+  const totalCounts = totalCountsRows[0];
+
+  // Get root-level folders (no parent)
+  const rootFolders = await db.query.folders.findMany({
+    where: and(eq(folders.userId, userId), isNull(folders.parentId)),
+    columns: { id: true },
   });
 
-  try {
-    // Get total counts for all user's notes using single query
-    const totalCountsResult = await db.execute<{
-      all_count: string;
-      starred_count: string;
-      archived_count: string;
-      trash_count: string;
-    }>(sql`
-      SELECT
-        COUNT(*) FILTER (WHERE deleted = false AND archived = false) as all_count,
-        COUNT(*) FILTER (WHERE starred = true AND deleted = false AND archived = false) as starred_count,
-        COUNT(*) FILTER (WHERE archived = true AND deleted = false) as archived_count,
-        COUNT(*) FILTER (WHERE deleted = true) as trash_count
-      FROM notes
-      WHERE user_id = ${userId}
-    `);
+  const folderCounts: Record<
+    string,
+    {
+      all: number;
+      starred: number;
+      archived: number;
+      trash: number;
+    }
+  > = {};
 
-    const totalCountsRows = totalCountsResult as unknown as {
-      all_count: string;
-      starred_count: string;
-      archived_count: string;
-      trash_count: string;
-    }[];
-    const totalCounts = totalCountsRows[0];
+  if (rootFolders.length > 0) {
+    // Build a map of folder ID to its descendants
+    const folderToDescendants = new Map<string, string[]>();
 
-    // Get root-level folders (no parent)
-    const rootFolders = await db.query.folders.findMany({
-      where: and(eq(folders.userId, userId), isNull(folders.parentId)),
-      columns: { id: true },
-    });
-
-    const folderCounts: Record<
-      string,
-      {
-        all: number;
-        starred: number;
-        archived: number;
-        trash: number;
-      }
-    > = {};
-
-    if (rootFolders.length > 0) {
-      // Build a map of folder ID to its descendants
-      const folderToDescendants = new Map<string, string[]>();
-
-      for (const rootFolder of rootFolders) {
-        const descendants = await getAllDescendantFolderIds(rootFolder.id, userId);
-        folderToDescendants.set(rootFolder.id, descendants);
-      }
-
-      // Get counts for all folders in parallel
-      const folderCountsPromises = Array.from(folderToDescendants.entries()).map(
-        async ([folderId, descendants]) => {
-          const counts = await getCountsForFolders(descendants, userId);
-          return { folderId, counts };
-        }
-      );
-
-      const folderCountsResults = await Promise.all(folderCountsPromises);
-
-      for (const { folderId, counts } of folderCountsResults) {
-        folderCounts[folderId] = counts;
-      }
+    for (const rootFolder of rootFolders) {
+      const descendants = await getAllDescendantFolderIds(rootFolder.id, userId);
+      folderToDescendants.set(rootFolder.id, descendants);
     }
 
-    const counts = {
-      all: parseInt(totalCounts.all_count),
-      starred: parseInt(totalCounts.starred_count),
-      archived: parseInt(totalCounts.archived_count),
-      trash: parseInt(totalCounts.trash_count),
-      folders: folderCounts,
-    };
+    // Get counts for all folders in parallel
+    const folderCountsPromises = Array.from(folderToDescendants.entries()).map(
+      async ([folderId, descendants]) => {
+        const counts = await getCountsForFolders(descendants, userId);
+        return { folderId, counts };
+      }
+    );
 
-    // Warm the cache
-    const cacheKey = CacheKeys.notesCounts(userId);
-    await setCache(cacheKey, counts, CacheTTL.notesCounts);
+    const folderCountsResults = await Promise.all(folderCountsPromises);
 
-    span?.setStatus({ code: 1 }); // OK
-  } catch (error) {
-    span?.setStatus({ code: 2 }); // ERROR
-    Sentry.captureException(error);
-    throw error;
-  } finally {
-    span?.end();
+    for (const { folderId, counts } of folderCountsResults) {
+      folderCounts[folderId] = counts;
+    }
   }
+
+  const counts = {
+    all: parseInt(totalCounts.all_count),
+    starred: parseInt(totalCounts.starred_count),
+    archived: parseInt(totalCounts.archived_count),
+    trash: parseInt(totalCounts.trash_count),
+    folders: folderCounts,
+  };
+
+  // Warm the cache
+  const cacheKey = CacheKeys.notesCounts(userId);
+  await setCache(cacheKey, counts, CacheTTL.notesCounts);
 }
 
 const getNotesCountsRoute = createRoute({
@@ -245,16 +229,6 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
   const query = c.req.valid("query");
   const folderId = query.folder_id;
 
-  // Start Sentry performance monitoring
-  const span = Sentry.startInactiveSpan({
-    name: folderId ? "GET /api/notes/counts?folder_id" : "GET /api/notes/counts",
-    op: "http.server",
-    attributes: {
-      "user.id": userId,
-      "folder.id": folderId || "root",
-    },
-  });
-
   try {
     // If folder_id is provided, get counts for each direct child folder
     if (folderId) {
@@ -274,12 +248,8 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
       >(cacheKey);
 
       if (cachedCounts) {
-        span?.setStatus({ code: 1 }); // OK
-        span?.setAttribute("cache.hit", true);
         return c.json(cachedCounts, 200);
       }
-
-      span?.setAttribute("cache.hit", false);
 
       // Get direct children of the specified folder
       const childFolders = await db.query.folders.findMany({
@@ -290,7 +260,6 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
       if (childFolders.length === 0) {
         // No child folders, return empty object
         await setCache(cacheKey, {}, CacheTTL.notesCounts);
-        span?.setStatus({ code: 1 }); // OK
         return c.json({}, 200);
       }
 
@@ -330,8 +299,6 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
       // Cache the results
       await setCache(cacheKey, folderCounts, CacheTTL.notesCounts);
 
-      span?.setStatus({ code: 1 }); // OK
-      span?.setAttribute("folder.count", childFolders.length);
       return c.json(folderCounts, 200);
     }
 
@@ -356,12 +323,8 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
     }>(cacheKey);
 
     if (cachedCounts) {
-      span?.setStatus({ code: 1 }); // OK
-      span?.setAttribute("cache.hit", true);
       return c.json(cachedCounts, 200);
     }
-
-    span?.setAttribute("cache.hit", false);
 
     // Get total counts for all user's notes using single query
     const totalCountsResult = await db.execute<{
@@ -438,15 +401,9 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
     // Cache the results
     await setCache(cacheKey, counts, CacheTTL.notesCounts);
 
-    span?.setStatus({ code: 1 }); // OK
-    span?.setAttribute("root.folder.count", rootFolders.length);
     return c.json(counts, 200);
   } catch (error) {
-    span?.setStatus({ code: 2 }); // ERROR
-    Sentry.captureException(error);
     throw error;
-  } finally {
-    span?.end();
   }
 };
 

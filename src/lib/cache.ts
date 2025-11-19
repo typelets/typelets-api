@@ -2,7 +2,6 @@ import { Redis } from "@upstash/redis";
 import { logger } from "./logger";
 import { db, folders } from "../db";
 import { eq } from "drizzle-orm";
-import * as Sentry from "@sentry/node";
 
 let client: Redis | null = null;
 
@@ -48,117 +47,68 @@ export async function getCache<T>(key: string): Promise<T | null> {
   const cache = getCacheClient();
   if (!cache) return null;
 
-  return await Sentry.startSpan(
-    {
-      op: "cache.get",
-      name: "cache.get",
-      attributes: {
-        "cache.key": key,
-      },
-    },
-    async (span) => {
-      const startTime = Date.now();
-      try {
-        const data = await cache.get<string>(key);
-        const duration = Date.now() - startTime;
-        const hit = data !== null;
+  const startTime = Date.now();
+  try {
+    const data = await cache.get<string>(key);
+    const duration = Date.now() - startTime;
+    const hit = data !== null;
 
-        // Set Sentry span attributes
-        span.setAttribute("cache.hit", hit);
-        if (data) {
-          span.setAttribute("cache.item_size", JSON.stringify(data).length);
-        }
+    // Log cache operation with metrics
+    logger.cacheOperation("get", key, hit, duration);
 
-        // Log cache operation with metrics
-        logger.cacheOperation("get", key, hit, duration);
-
-        return data ? (JSON.parse(data) as T) : null;
-      } catch (error) {
-        span.setStatus({ code: 2, message: "error" }); // SPAN_STATUS_ERROR
-        logger.cacheError("get", key, error instanceof Error ? error : new Error(String(error)));
-        return null;
-      }
-    }
-  );
+    return data ? (JSON.parse(data) as T) : null;
+  } catch (error) {
+    logger.cacheError("get", key, error instanceof Error ? error : new Error(String(error)));
+    return null;
+  }
 }
 
 export async function setCache(key: string, value: unknown, ttlSeconds?: number): Promise<void> {
   const cache = getCacheClient();
   if (!cache) return;
 
-  await Sentry.startSpan(
-    {
-      op: "cache.put",
-      name: "cache.put",
-      attributes: {
-        "cache.key": key,
-      },
-    },
-    async (span) => {
-      const startTime = Date.now();
-      try {
-        const serialized = JSON.stringify(value);
+  const startTime = Date.now();
+  try {
+    const serialized = JSON.stringify(value);
 
-        // Set Sentry span attributes
-        span.setAttribute("cache.item_size", serialized.length);
-        if (ttlSeconds) {
-          span.setAttribute("cache.ttl", ttlSeconds);
-        }
-
-        if (ttlSeconds) {
-          await cache.setex(key, ttlSeconds, serialized);
-        } else {
-          await cache.set(key, serialized);
-        }
-        const duration = Date.now() - startTime;
-
-        // Log cache operation with metrics
-        logger.cacheOperation("set", key, undefined, duration, ttlSeconds);
-      } catch (error) {
-        span.setStatus({ code: 2, message: "error" }); // SPAN_STATUS_ERROR
-        logger.cacheError("set", key, error instanceof Error ? error : new Error(String(error)));
-      }
+    if (ttlSeconds) {
+      await cache.setex(key, ttlSeconds, serialized);
+    } else {
+      await cache.set(key, serialized);
     }
-  );
+    const duration = Date.now() - startTime;
+
+    // Log cache operation with metrics
+    logger.cacheOperation("set", key, undefined, duration, ttlSeconds);
+  } catch (error) {
+    logger.cacheError("set", key, error instanceof Error ? error : new Error(String(error)));
+  }
 }
 
 export async function deleteCache(...keys: string[]): Promise<void> {
   const cache = getCacheClient();
   if (!cache || keys.length === 0) return;
 
-  await Sentry.startSpan(
-    {
-      op: "cache.remove",
-      name: "cache.remove",
-      attributes: {
-        "cache.key": keys[0], // Use first key as representative
-        "cache.key_count": keys.length,
-      },
-    },
-    async (span) => {
-      const startTime = Date.now();
-      try {
-        // Delete keys individually (Upstash REST API)
-        if (keys.length === 1) {
-          await cache.del(keys[0]);
-        } else {
-          // Use Promise.all for parallel deletion
-          await Promise.all(keys.map((key) => cache.del(key)));
-        }
-        const duration = Date.now() - startTime;
-
-        // Log cache operation with metrics (use first key as representative)
-        logger.cacheOperation("delete", keys[0], undefined, duration, undefined, keys.length);
-      } catch (error) {
-        span.setStatus({ code: 2, message: "error" }); // SPAN_STATUS_ERROR
-        logger.cacheError(
-          "delete",
-          keys.join(", "),
-          error instanceof Error ? error : new Error(String(error))
-        );
-      }
+  const startTime = Date.now();
+  try {
+    // Delete keys individually (Upstash REST API)
+    if (keys.length === 1) {
+      await cache.del(keys[0]);
+    } else {
+      // Use Promise.all for parallel deletion
+      await Promise.all(keys.map((key) => cache.del(key)));
     }
-  );
+    const duration = Date.now() - startTime;
+
+    // Log cache operation with metrics (use first key as representative)
+    logger.cacheOperation("delete", keys[0], undefined, duration, undefined, keys.length);
+  } catch (error) {
+    logger.cacheError(
+      "delete",
+      keys.join(", "),
+      error instanceof Error ? error : new Error(String(error))
+    );
+  }
 }
 
 export async function deleteCachePattern(pattern: string): Promise<void> {

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -e  # Exit on any command failure
 
+# Load NVM if available
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Add common paths for pnpm
+export PATH="$HOME/.nvm/versions/node/$(node -v)/bin:$PATH"
+
 echo "🔍 Running pre-commit checks..."
 
 echo "📝 Running lint..."

@@ -1,5 +1,4 @@
 import * as esbuild from "esbuild";
-import { sentryEsbuildPlugin } from "@sentry/esbuild-plugin";
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -15,32 +14,6 @@ const buildOptions = {
   sourcemap: true, // Generate source maps
   minify: isProduction, // Minify in production
 };
-
-// Add Sentry plugin only in production and when auth token is available
-if (isProduction && process.env.SENTRY_AUTH_TOKEN) {
-  buildOptions.plugins = [
-    sentryEsbuildPlugin({
-      org: process.env.SENTRY_ORG,
-      project: process.env.SENTRY_PROJECT,
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-
-      // Upload source maps to Sentry
-      sourcemaps: {
-        assets: "./dist/**",
-        filesToDeleteAfterUpload: ["./dist/**/*.map"], // Clean up source map files after upload
-      },
-
-      // Set release version
-      release: {
-        name: process.env.npm_package_version || "1.0.0",
-      },
-    }),
-  ];
-
-  console.log("🔐 Sentry source maps upload enabled");
-} else {
-  console.log("ℹ️  Sentry source maps upload skipped (development or no auth token)");
-}
 
 // Run build
 try {

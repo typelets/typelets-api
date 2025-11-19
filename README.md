@@ -28,11 +28,10 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - [Database Schema](#database-schema)
 - [Security Features](#security-features)
 - [Environment Variables](#environment-variables)
-- [Monitoring with Sentry.io](#monitoring-with-sentryio)
+- [Monitoring with Grafana Cloud](#monitoring-with-grafana-cloud)
   - [Features](#features-1)
   - [Configuration](#configuration)
-  - [Source Maps](#source-maps)
-  - [Automated Release Tracking](#automated-release-tracking)
+  - [What Gets Monitored](#what-gets-monitored)
 - [Development](#development)
   - [Project Structure](#project-structure)
   - [Type Safety](#type-safety)
@@ -59,7 +58,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - ⚡ **Fast & Type-Safe** with TypeScript and Hono
 - 🐘 **PostgreSQL** with Drizzle ORM
 - 🚀 **Valkey/Redis Caching** for high-performance data access with cluster support
-- 📊 **Error Tracking & Monitoring** with Sentry.io for observability and performance monitoring
+- 📊 **Observability** with Grafana Cloud and OpenTelemetry for distributed tracing, metrics, and logging
 - 💻 **Code Execution** via secure Judge0 API proxy
 - 🛡️ **Comprehensive Rate Limiting** for HTTP, WebSocket, file uploads, and code execution
 - 🏥 **Health Checks** with detailed system status and readiness probes
@@ -73,7 +72,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - **Cache**: Valkey/Redis Cluster for high-performance caching
 - **Authentication**: [Clerk](https://clerk.com/)
 - **Validation**: [Zod](https://zod.dev/)
-- **Monitoring**: [Sentry.io](https://sentry.io/) for error tracking and performance monitoring
+- **Observability**: [Grafana Cloud](https://grafana.com/products/cloud/) with [OpenTelemetry](https://opentelemetry.io/) for tracing, metrics, and logging
 - **Logging**: Structured JSON logging with automatic error capture
 - **TypeScript**: Strict mode enabled for type safety
 
@@ -84,7 +83,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - PostgreSQL database (local installation or Docker)
 - Clerk account for authentication ([sign up here](https://dashboard.clerk.com))
 - Valkey/Redis cluster for caching (optional - improves performance)
-- Sentry.io account for monitoring (optional - [sign up here](https://sentry.io/signup/))
+- Grafana Cloud account for monitoring (optional - [sign up here](https://grafana.com/products/cloud/))
 - Judge0 API key for code execution (optional - [get from RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce))
 
 ## Local Development Setup
@@ -283,7 +282,10 @@ The application uses the following main tables:
 | `VALKEY_HOST`                  | Valkey/Redis cluster hostname                    | No       | -                                |
 | `VALKEY_PORT`                  | Valkey/Redis cluster port                        | No       | 6379                             |
 | **Monitoring (Optional)**      |                                                  |          |                                  |
-| `SENTRY_DSN`                   | Sentry.io DSN for error tracking                 | No       | -                                |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`  | Grafana Cloud OTLP endpoint (prod only)          | No       | -                                |
+| `GRAFANA_CLOUD_API_KEY`        | Base64 encoded Grafana Cloud credentials         | No       | -                                |
+| `OTEL_SERVICE_NAME`            | Service name for OpenTelemetry                   | No       | typelets-api                     |
+| `OTEL_ENABLED`                 | Force enable OTEL in dev (not recommended)       | No       | false                            |
 | **Rate Limiting**              |                                                  |          |                                  |
 | `HTTP_RATE_LIMIT_WINDOW_MS`    | HTTP rate limit window in milliseconds           | No       | 900000 (15 min)                  |
 | `HTTP_RATE_LIMIT_MAX_REQUESTS` | Max HTTP requests per window                     | No       | 1000                             |
@@ -306,101 +308,96 @@ The application uses the following main tables:
 
 \*Required only for code execution features
 
-## Monitoring with Sentry.io
+## Monitoring with Grafana Cloud
 
 ⚠️ **Monitoring is completely optional** - The API works perfectly without it.
 
-The API integrates with [Sentry.io](https://sentry.io/) for comprehensive error tracking, performance monitoring, and logging.
+The API integrates with [Grafana Cloud](https://grafana.com/products/cloud/) using [OpenTelemetry](https://opentelemetry.io/) for comprehensive observability with distributed tracing, metrics collection, and log aggregation.
 
 ### Features
 
-- **Error Tracking**: Automatic exception capture with full stack traces and context
-- **Source Maps**: Production builds automatically upload source maps for readable stack traces
-- **Performance Monitoring**: 100% transaction sampling for performance analysis
-- **Database Monitoring**: Automatic PostgreSQL query tracking and performance analysis
-- **Profiling**: CPU and memory profiling during active traces
-- **Structured Logging**: Automatic capture of console.log, console.warn, and console.error
-- **User Context**: Errors are automatically associated with authenticated users
-- **Environment Tracking**: Separate error tracking for development and production
-- **Release Tracking**: Errors automatically linked to code releases via GitHub Actions
+- **Distributed Tracing**: Automatic instrumentation for HTTP requests, database queries, and cache operations
+- **Metrics Collection**: Real-time metrics exported every 60 seconds
+- **Log Aggregation**: Structured JSON logs sent to Grafana Loki
+- **Automatic Instrumentation**: Zero-code instrumentation for:
+  - HTTP/HTTPS requests (Hono framework)
+  - PostgreSQL database queries
+  - Redis/Upstash cache operations
+- **Performance Monitoring**: Request duration, latency, and throughput tracking
+- **Error Tracking**: Automatic error capture with full context and stack traces
+- **User Context**: Requests are automatically tagged with user IDs
+- **Environment Tracking**: Separate monitoring for development and production
 
 ### Configuration
 
-Sentry is configured in the application with:
-
-- Profiling integration enabled
-- Console logging integration
-- 100% trace sampling rate
-- PII data collection for better debugging
-- Environment-based configuration
-
-**Setup**: Add your Sentry DSN to `.env`:
+**Setup**: Add your Grafana Cloud credentials to `.env`:
 
 ```env
-SENTRY_DSN=https://your-key@your-org-id.ingest.us.sentry.io/your-project-id
+# OpenTelemetry Configuration for Grafana Cloud
+OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-us-central-0.grafana.net/otlp
+GRAFANA_CLOUD_API_KEY=base64encodedstring
+OTEL_SERVICE_NAME=typelets-api
 ```
 
-Once configured, all errors are automatically captured and sent to Sentry with contextual information including:
+**Step-by-step setup:**
 
-- Error ID for tracking
-- User ID (if authenticated)
-- Request URL and method
-- Stack traces
+1. **Sign up for Grafana Cloud** (free tier available):
+   - Visit https://grafana.com/products/cloud/
 
-If `SENTRY_DSN` is not set, the application will run normally with error tracking disabled.
+2. **Get your OTLP endpoint:**
+   - Go to **Connections** → **Add new connection** → **OpenTelemetry**
+   - Copy the OTLP endpoint URL (e.g., `https://otlp-gateway-prod-us-central-0.grafana.net/otlp`)
 
-### Source Maps
+3. **Generate API credentials:**
+   - Create an API key with **MetricsPublisher** role
+   - Note your Grafana instance ID and API token
 
-Source maps are automatically generated during builds and uploaded to Sentry in production:
-
-**Development builds:**
-
-- Source maps are generated locally for debugging
-- Not uploaded to Sentry (saves bandwidth and quota)
-
-**Production builds:**
-
-- Source maps are generated and uploaded to Sentry
-- Requires `SENTRY_AUTH_TOKEN` environment variable
-- Stack traces in Sentry show your original TypeScript code, not bundled JavaScript
-- Source maps are deleted after upload to keep deployments clean
-
-**Setup:**
-
-1. Create a Sentry Auth Token: [Sentry Settings → Auth Tokens](https://sentry.io/settings/account/api/auth-tokens/)
-2. Required scopes: `project:releases`, `project:write`
-3. Add to your environment:
+4. **Encode your credentials:**
    ```bash
-   export SENTRY_AUTH_TOKEN=your-token-here
-   NODE_ENV=production pnpm run build
+   echo -n "instanceID:apiToken" | base64
    ```
 
-The build will automatically upload source maps when both `NODE_ENV=production` and `SENTRY_AUTH_TOKEN` are set.
+5. **Set environment variables:**
+   - Add the configuration shown above to your `.env` file
 
-### Automated Release Tracking
+6. **Start the application in production mode:**
+   ```bash
+   NODE_ENV=production pnpm start
+   ```
+   You should see: `✅ OpenTelemetry initialized with Grafana Cloud`
 
-The repository includes automated Sentry release tracking via GitHub Actions. When a new release is published:
+**Important Notes:**
+- Observability is **ONLY enabled in production** (`NODE_ENV=production`) by default
+- This prevents development metrics from flooding your logs and consuming quota
+- In development, the app will show: `⚠️ OpenTelemetry not initialized - Running in development mode`
+- To force enable in development (not recommended): Set `OTEL_ENABLED=true`
+- If credentials are not set, the application runs normally with observability disabled
 
-1. **Automatic Release Creation**: A Sentry release is created with the version tag
-2. **Commit Association**: All commits are automatically associated with the release
-3. **Error Attribution**: Errors can be traced back to specific releases
+### What Gets Monitored
 
-**Setup Required (One-time)**:
+**Automatic Instrumentation:**
+- HTTP requests (method, path, status code, duration)
+- PostgreSQL queries (operation, table, duration)
+- Redis/Upstash operations (get, set, delete with cache hit/miss tracking)
 
-To enable automated release tracking and source map uploads, add your Sentry Auth Token as a GitHub secret:
+**Structured Logging:**
+- Authentication events (login, logout, token refresh)
+- Rate limiting violations
+- Security events (failed auth, suspicious activity)
+- Billing limit violations
+- WebSocket connection events
+- File upload events and storage operations
+- HTTP request/response logs
+- Database query performance
+- Cache operations and hit rates
+- Business events (note creation, folder operations, etc.)
 
-1. Go to **Sentry.io** → **Settings** → **Auth Tokens**
-2. Create a new token with `project:releases` and `project:write` scopes
-3. In GitHub, go to **Settings** → **Secrets and variables** → **Actions**
-4. Create a new secret named `SENTRY_AUTH_TOKEN` with your token value
-
-**Note**: The same token is used for both release tracking and source map uploads during CI/CD builds.
-
-The workflow automatically triggers on every release and:
-
-- Creates a new Sentry release with the version tag
-- Associates all commits since the last release
-- Finalizes the release for tracking
+All logs, traces, and metrics are automatically sent to Grafana Cloud where you can:
+- Visualize request traces with flame graphs
+- Create custom dashboards for metrics
+- Set up alerts for errors and performance issues
+- Search and analyze logs with LogQL
+- Correlate logs, metrics, and traces in one place
 
 ## Development
 

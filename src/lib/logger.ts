@@ -1,4 +1,4 @@
-import * as Sentry from "@sentry/node";
+import { trace, context } from "@opentelemetry/api";
 
 interface LogLevel {
   level: string;
@@ -17,9 +17,13 @@ const LOG_LEVELS: Record<string, LogLevel> = {
 class Logger {
   private environment: string;
   private currentLogLevel: LogLevel;
+  private serviceName: string;
+  private serviceVersion: string;
 
   constructor() {
     this.environment = process.env.NODE_ENV || "development";
+    this.serviceName = process.env.OTEL_SERVICE_NAME || "typelets-api";
+    this.serviceVersion = process.env.npm_package_version || "1.0.0";
 
     // Set log level based on environment
     const logLevelName =
@@ -52,41 +56,101 @@ class Logger {
     return `/${normalized}`;
   }
 
-  error(message: string, meta: LogMetadata = {}, error?: Error): void {
-    if (this.shouldLog(LOG_LEVELS.error)) {
-      if (error) {
-        // Send exception with stack trace and metadata
-        Sentry.captureException(error, {
-          contexts: {
-            metadata: meta,
-          },
-          tags: {
-            type: (meta.type as string) || "error",
-          },
-        });
-      } else {
-        // Send error log with metadata
-        Sentry.logger.error(message, meta);
+  private getTraceContext(): { trace_id?: string; span_id?: string } {
+    try {
+      const span = trace.getSpan(context.active());
+      if (span) {
+        const spanContext = span.spanContext();
+        return {
+          trace_id: spanContext.traceId,
+          span_id: spanContext.spanId,
+        };
       }
+    } catch (error) {
+      // OpenTelemetry not initialized or no active span
     }
+    return {};
+  }
+
+  private log(level: LogLevel, message: string, meta: LogMetadata = {}, error?: Error): void {
+    if (!this.shouldLog(level)) return;
+
+    const traceContext = this.getTraceContext();
+
+    // Grafana/Loki standardized log structure
+    const logData: Record<string, any> = {
+      // Timestamps - ISO 8601 format
+      timestamp: new Date().toISOString(),
+      "@timestamp": new Date().toISOString(), // For Elasticsearch/Loki compatibility
+
+      // Service identification (critical for Grafana)
+      service: this.serviceName,
+      service_name: this.serviceName, // Alternative field name
+      service_version: this.serviceVersion,
+      environment: this.environment,
+
+      // Log level
+      level: level.level,
+      severity: level.level.toUpperCase(), // Alternative field for severity
+
+      // Message
+      message: message,
+      msg: message, // Alternative field name
+
+      // OpenTelemetry trace correlation
+      ...traceContext,
+
+      // Custom metadata
+      ...meta,
+    };
+
+    // Standardized error formatting
+    if (error) {
+      logData.error = {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        // Include error cause if present (Error chaining)
+        ...(error.cause && { cause: String(error.cause) }),
+      };
+      logData.error_message = error.message; // Top-level for easy filtering
+      logData.error_type = error.name;
+    }
+
+    // Use console methods based on level
+    const logMessage = JSON.stringify(logData);
+    switch (level.level) {
+      case "error":
+        console.error(logMessage);
+        break;
+      case "warn":
+        console.warn(logMessage);
+        break;
+      case "info":
+        console.info(logMessage);
+        break;
+      case "debug":
+        console.debug(logMessage);
+        break;
+      default:
+        console.log(logMessage);
+    }
+  }
+
+  error(message: string, meta: LogMetadata = {}, error?: Error): void {
+    this.log(LOG_LEVELS.error, message, meta, error);
   }
 
   warn(message: string, meta: LogMetadata = {}): void {
-    if (this.shouldLog(LOG_LEVELS.warn)) {
-      Sentry.logger.warn(message, meta);
-    }
+    this.log(LOG_LEVELS.warn, message, meta);
   }
 
   info(message: string, meta: LogMetadata = {}): void {
-    if (this.shouldLog(LOG_LEVELS.info)) {
-      Sentry.logger.info(message, meta);
-    }
+    this.log(LOG_LEVELS.info, message, meta);
   }
 
   debug(message: string, meta: LogMetadata = {}): void {
-    if (this.shouldLog(LOG_LEVELS.debug)) {
-      Sentry.logger.debug(message, meta);
-    }
+    this.log(LOG_LEVELS.debug, message, meta);
   }
 
   // Special methods for different types of events
@@ -99,11 +163,26 @@ class Logger {
   ): void {
     const normalizedPath = this.normalizePath(path);
     this.info(`[API] ${method} ${normalizedPath}`, {
+      // Event type
       type: "http_request",
+      event_type: "http_request",
+
+      // HTTP-specific fields (OpenTelemetry semantic conventions)
+      "http.method": method,
+      "http.route": normalizedPath,
+      "http.path": path,
+      "http.status_code": statusCode,
+
+      // Legacy fields for backward compatibility
       method,
-      path,
       statusCode,
+
+      // Performance
+      duration_ms: duration,
       duration,
+
+      // User context
+      "user.id": userId || "anonymous",
       userId: userId || "anonymous",
     });
   }
@@ -118,13 +197,24 @@ class Logger {
   ): void {
     const meta: LogMetadata = {
       type: "websocket_event",
+      event_type: "websocket_event",
       eventType,
+      "user.id": userId || "anonymous",
       userId: userId || "anonymous",
     };
 
-    if (duration !== undefined) meta.duration = duration;
-    if (resourceId) meta.resourceId = resourceId;
-    if (resourceType) meta.resourceType = resourceType;
+    if (duration !== undefined) {
+      meta.duration_ms = duration;
+      meta.duration = duration;
+    }
+    if (resourceId) {
+      meta.resource_id = resourceId;
+      meta.resourceId = resourceId;
+    }
+    if (resourceType) {
+      meta.resource_type = resourceType;
+      meta.resourceType = resourceType;
+    }
     if (status) meta.status = status;
 
     this.info(`WebSocket ${eventType}`, meta);
@@ -133,9 +223,22 @@ class Logger {
   databaseQuery(operation: string, table: string, duration: number, userId?: string): void {
     this.debug(`[DB] ${operation} ${table}`, {
       type: "database_query",
+      event_type: "database_query",
+
+      // Database fields (OpenTelemetry semantic conventions)
+      "db.operation": operation,
+      "db.table": table,
+
+      // Legacy fields
       operation,
       table,
+
+      // Performance
+      duration_ms: duration,
       duration,
+
+      // User context
+      "user.id": userId || "anonymous",
       userId: userId || "anonymous",
     });
   }
@@ -144,9 +247,14 @@ class Logger {
     const status = success ? "success" : "failed";
     this.info(`Code execution ${status}`, {
       type: "code_execution",
+      event_type: "code_execution",
+      language_id: languageId,
       languageId,
+      duration_ms: duration,
       duration,
       success,
+      status,
+      "user.id": userId || "anonymous",
       userId: userId || "anonymous",
     });
   }
@@ -154,7 +262,10 @@ class Logger {
   businessEvent(eventName: string, userId: string, metadata: LogMetadata = {}): void {
     this.info(`Business event ${eventName}`, {
       type: "business_event",
+      event_type: "business_event",
+      event_name: eventName,
       eventName,
+      "user.id": userId,
       userId,
       ...metadata,
     });
@@ -167,7 +278,10 @@ class Logger {
   ): void {
     this.warn(`Security event ${eventType}`, {
       type: "security_event",
+      event_type: "security_event",
+      security_event_type: eventType,
       eventType,
+      security_severity: severity,
       severity,
       ...details,
     });
@@ -184,14 +298,29 @@ class Logger {
   ): void {
     const meta: LogMetadata = {
       type: "cache_operation",
+      event_type: "cache_operation",
+      "cache.operation": operation,
+      "cache.key": key,
       operation,
       key,
     };
 
-    if (hit !== undefined) meta.hit = hit;
-    if (duration !== undefined) meta.duration = duration;
-    if (ttl !== undefined) meta.ttl = ttl;
-    if (keyCount !== undefined) meta.keyCount = keyCount;
+    if (hit !== undefined) {
+      meta["cache.hit"] = hit;
+      meta.hit = hit;
+    }
+    if (duration !== undefined) {
+      meta.duration_ms = duration;
+      meta.duration = duration;
+    }
+    if (ttl !== undefined) {
+      meta["cache.ttl"] = ttl;
+      meta.ttl = ttl;
+    }
+    if (keyCount !== undefined) {
+      meta["cache.key_count"] = keyCount;
+      meta.keyCount = keyCount;
+    }
 
     // Log at debug level
     this.debug(`Cache ${operation}${hit !== undefined ? (hit ? " HIT" : " MISS") : ""}`, meta);
@@ -202,9 +331,11 @@ class Logger {
       `Cache ${operation} error for key ${key}`,
       {
         type: "cache_error",
+        event_type: "cache_error",
+        "cache.operation": operation,
+        "cache.key": key,
         operation,
         key,
-        error: error.message,
       },
       error
     );
@@ -223,11 +354,17 @@ class Logger {
 
     this.info(`File upload ${status}`, {
       type: "file_upload",
+      event_type: "file_upload",
+      "file.name": filename,
+      "file.size": size,
+      "file.mime_type": mimeType,
       filename,
       size,
       mimeType,
       status,
+      "user.id": userId || "anonymous",
       userId: userId || "anonymous",
+      note_id: noteId || "unknown",
       noteId: noteId || "unknown",
     });
   }
@@ -236,8 +373,12 @@ class Logger {
   storageUpdate(totalBytes: number, operation: "add" | "remove", deltaBytes?: number): void {
     this.debug("Storage updated", {
       type: "storage_update",
+      event_type: "storage_update",
+      "storage.total_bytes": totalBytes,
+      "storage.operation": operation,
       totalBytes,
       operation,
+      delta_bytes: deltaBytes || 0,
       deltaBytes: deltaBytes || 0,
     });
   }

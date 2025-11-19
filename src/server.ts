@@ -1,11 +1,9 @@
 import "dotenv-flow/config";
 
-// IMPORTANT: Import instrument.ts at the top of the file to initialize Sentry
-import "./instrument";
+// IMPORTANT: Import instrumentation at the top to initialize OpenTelemetry
+import "./instrumentation";
 
 const isDevelopment = process.env.NODE_ENV === "development";
-
-import * as Sentry from "@sentry/node";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
@@ -81,14 +79,8 @@ app.use("*", async (c, next) => {
   }
 });
 
-// Sentry user context middleware
+// User context tracking (placeholder for future observability)
 app.use("*", async (c, next) => {
-  // Set user context if available (after auth middleware runs, userId will be set)
-  const userId = c.get("userId");
-  if (userId) {
-    Sentry.setUser({ id: userId });
-  }
-
   return next();
 });
 
@@ -413,16 +405,6 @@ app.onError((err, c) => {
 
   // Get user context
   const userId = c.get("userId") || "anonymous";
-
-  // Capture exception in Sentry
-  Sentry.captureException(err, {
-    extra: {
-      errorId,
-      url: c.req.url,
-      method: c.req.method,
-      userId,
-    },
-  });
 
   // Log full error details server-side only
   logger.error(

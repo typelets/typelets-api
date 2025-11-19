@@ -10,7 +10,7 @@ const config: Config = {
     "src/**/*.{ts,tsx}",
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
-    "!src/instrument.ts", // Exclude Sentry instrumentation
+    "!src/instrumentation.ts", // Exclude OpenTelemetry instrumentation
   ],
   coverageDirectory: "coverage",
   coverageReporters: ["text", "lcov", "html"],
