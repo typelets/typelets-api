@@ -60,7 +60,7 @@ if (shouldEnableOtel) {
         exporter: metricExporter,
         exportIntervalMillis: 60000, // Export metrics every 60 seconds
       }),
-      logRecordProcessor: new BatchLogRecordProcessor(logExporter),
+      logRecordProcessors: [new BatchLogRecordProcessor(logExporter)],
       instrumentations: [
         getNodeAutoInstrumentations({
           // Automatic instrumentation for HTTP, gRPC, database clients, etc.

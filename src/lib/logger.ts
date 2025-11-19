@@ -21,7 +21,9 @@ class Logger {
   private currentLogLevel: LogLevel;
   private serviceName: string;
   private serviceVersion: string;
-  private otelLogger: ReturnType<ReturnType<typeof logs.getLoggerProvider>["getLogger"]> | null;
+  private otelLogger: ReturnType<ReturnType<typeof logs.getLoggerProvider>["getLogger"]> | null =
+    null;
+  private otelLoggerInitialized: boolean = false;
 
   constructor() {
     this.environment = process.env.NODE_ENV || "development";
@@ -32,15 +34,28 @@ class Logger {
     const logLevelName =
       process.env.LOG_LEVEL || (this.environment === "production" ? "info" : "debug");
     this.currentLogLevel = LOG_LEVELS[logLevelName] || LOG_LEVELS.info;
+  }
 
-    // Get OpenTelemetry logger if available
+  // Lazy-load OpenTelemetry logger on first use (after OTEL SDK is initialized)
+  private getOtelLogger(): ReturnType<
+    ReturnType<typeof logs.getLoggerProvider>["getLogger"]
+  > | null {
+    if (this.otelLoggerInitialized) {
+      return this.otelLogger;
+    }
+
     try {
       const loggerProvider = logs.getLoggerProvider();
       this.otelLogger = loggerProvider.getLogger(this.serviceName, this.serviceVersion);
-    } catch (error) {
+      this.otelLoggerInitialized = true;
+      console.log("✅ OpenTelemetry logger initialized for application logs");
+    } catch {
       // OpenTelemetry not initialized, fall back to console logging
       this.otelLogger = null;
+      this.otelLoggerInitialized = true;
     }
+
+    return this.otelLogger;
   }
 
   private shouldLog(level: LogLevel): boolean {
@@ -78,7 +93,7 @@ class Logger {
           span_id: spanContext.spanId,
         };
       }
-    } catch (error) {
+    } catch {
       // OpenTelemetry not initialized or no active span
     }
     return {};
@@ -90,7 +105,7 @@ class Logger {
     const traceContext = this.getTraceContext();
 
     // Grafana/Loki standardized log structure
-    const logData: Record<string, any> = {
+    const logData: Record<string, unknown> = {
       // Timestamps - ISO 8601 format
       timestamp: new Date().toISOString(),
       "@timestamp": new Date().toISOString(), // For Elasticsearch/Loki compatibility
@@ -130,9 +145,10 @@ class Logger {
     }
 
     // Emit log via OpenTelemetry if available
-    if (this.otelLogger) {
+    const otelLogger = this.getOtelLogger();
+    if (otelLogger) {
       try {
-        this.otelLogger.emit({
+        otelLogger.emit({
           severityNumber: level.severity,
           severityText: level.level.toUpperCase(),
           body: message,
@@ -150,7 +166,7 @@ class Logger {
             }),
           },
         });
-      } catch (err) {
+      } catch {
         // If OTEL logging fails, fall back to console
       }
     }
