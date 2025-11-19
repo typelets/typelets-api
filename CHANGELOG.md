@@ -1,3 +1,10 @@
+## [1.15.2](https://github.com/typelets/typelets-api/compare/v1.15.1...v1.15.2) (2025-11-19)
+
+
+### Bug Fixes
+
+* use resourceFromAttributes instead of Resource constructor ([223a523](https://github.com/typelets/typelets-api/commit/223a5233b58676d23a93f20b36ba9529bc0fa891))
+
 ## [1.15.1](https://github.com/typelets/typelets-api/compare/v1.15.0...v1.15.1) (2025-11-19)
 
 
