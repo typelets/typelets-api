@@ -1,3 +1,10 @@
+## [1.15.6](https://github.com/typelets/typelets-api/compare/v1.15.5...v1.15.6) (2025-11-19)
+
+
+### Bug Fixes
+
+* use logRecordProcessors array and lazy-load OTEL logger ([5b1eef3](https://github.com/typelets/typelets-api/commit/5b1eef3845a03961773ecb0a76fa2107db0a310d))
+
 ## [1.15.5](https://github.com/typelets/typelets-api/compare/v1.15.4...v1.15.5) (2025-11-19)
 
 
