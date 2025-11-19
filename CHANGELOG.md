@@ -1,3 +1,10 @@
+## [1.15.1](https://github.com/typelets/typelets-api/compare/v1.15.0...v1.15.1) (2025-11-19)
+
+
+### Bug Fixes
+
+* add missing OpenTelemetry dependencies for production build ([587c295](https://github.com/typelets/typelets-api/commit/587c2951a4ab61d45b9414b4bac03970c83f46e3))
+
 # [1.15.0](https://github.com/typelets/typelets-api/compare/v1.14.1...v1.15.0) (2025-11-19)
 
 
