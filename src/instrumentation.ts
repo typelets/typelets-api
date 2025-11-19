@@ -1,4 +1,4 @@
-import { NodeSDK } from "@opentelemetry/sdk-node";
+import { NodeSDK, logs } from "@opentelemetry/sdk-node";
 import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-proto";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-proto";
@@ -6,6 +6,8 @@ import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-proto";
 import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
+
+const { BatchLogRecordProcessor } = logs;
 
 // Only initialize OpenTelemetry in production (unless OTEL_ENABLED is explicitly set to "true")
 const isProduction = process.env.NODE_ENV === "production";
@@ -50,54 +52,54 @@ if (shouldEnableOtel) {
   });
 
   // Initialize OpenTelemetry SDK
-  const sdk = new NodeSDK({
-    resource,
-    traceExporter,
-    metricReader: new PeriodicExportingMetricReader({
-      exporter: metricExporter,
-      exportIntervalMillis: 60000, // Export metrics every 60 seconds
-    }),
-    logRecordProcessor: logExporter as any, // Type compatibility
-    instrumentations: [
-      getNodeAutoInstrumentations({
-        // Automatic instrumentation for HTTP, gRPC, database clients, etc.
-        "@opentelemetry/instrumentation-http": {
-          enabled: true,
-        },
-        "@opentelemetry/instrumentation-express": {
-          enabled: false, // We're using Hono, not Express
-        },
-        "@opentelemetry/instrumentation-pg": {
-          enabled: true, // PostgreSQL instrumentation
-        },
-        "@opentelemetry/instrumentation-redis": {
-          enabled: true, // Redis instrumentation for Upstash
-        },
+  try {
+    const sdk = new NodeSDK({
+      resource,
+      traceExporter,
+      metricReader: new PeriodicExportingMetricReader({
+        exporter: metricExporter,
+        exportIntervalMillis: 60000, // Export metrics every 60 seconds
       }),
-    ],
-  });
-
-  // Start the SDK
-  sdk
-    .start()
-    .then(() => {
-      console.log("✅ OpenTelemetry initialized with Grafana Cloud");
-      console.log(`📊 Service: ${serviceName} (v${serviceVersion})`);
-      console.log(`🌍 Environment: ${environment}`);
-      console.log(`🔗 Endpoint: ${process.env.OTEL_EXPORTER_OTLP_ENDPOINT}`);
-    })
-    .catch((error) => {
-      console.error("❌ Error initializing OpenTelemetry:", error);
+      logRecordProcessor: new BatchLogRecordProcessor(logExporter),
+      instrumentations: [
+        getNodeAutoInstrumentations({
+          // Automatic instrumentation for HTTP, gRPC, database clients, etc.
+          "@opentelemetry/instrumentation-http": {
+            enabled: true,
+          },
+          "@opentelemetry/instrumentation-express": {
+            enabled: false, // We're using Hono, not Express
+          },
+          "@opentelemetry/instrumentation-pg": {
+            enabled: true, // PostgreSQL instrumentation
+          },
+          "@opentelemetry/instrumentation-redis": {
+            enabled: true, // Redis instrumentation for Upstash
+          },
+        }),
+      ],
     });
 
-  // Graceful shutdown
-  process.on("SIGTERM", () => {
-    sdk
-      .shutdown()
-      .then(() => console.log("OpenTelemetry SDK shut down successfully"))
-      .catch((error) => console.error("Error shutting down OpenTelemetry SDK:", error))
-      .finally(() => process.exit(0));
-  });
+    // Start the SDK (synchronous operation)
+    sdk.start();
+
+    console.log("✅ OpenTelemetry initialized with Grafana Cloud");
+    console.log(`📊 Service: ${serviceName} (v${serviceVersion})`);
+    console.log(`🌍 Environment: ${environment}`);
+    console.log(`🔗 Endpoint: ${process.env.OTEL_EXPORTER_OTLP_ENDPOINT}`);
+
+    // Graceful shutdown
+    process.on("SIGTERM", () => {
+      sdk
+        .shutdown()
+        .then(() => console.log("OpenTelemetry SDK shut down successfully"))
+        .catch((error) => console.error("Error shutting down OpenTelemetry SDK:", error))
+        .finally(() => process.exit(0));
+    });
+  } catch (error) {
+    console.error("❌ Error initializing OpenTelemetry SDK:", error);
+    console.error("   OpenTelemetry will be disabled. Application will continue without observability.");
+  }
 } else {
   const reason = !process.env.OTEL_EXPORTER_OTLP_ENDPOINT
     ? "OTEL_EXPORTER_OTLP_ENDPOINT not set"
