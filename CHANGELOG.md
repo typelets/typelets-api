@@ -1,3 +1,10 @@
+## [1.15.3](https://github.com/typelets/typelets-api/compare/v1.15.2...v1.15.3) (2025-11-19)
+
+
+### Bug Fixes
+
+* correct OpenTelemetry SDK initialization - start() is synchronous ([b56b768](https://github.com/typelets/typelets-api/commit/b56b768831b2f96d1382c962dc938dc87c5ace52))
+
 ## [1.15.2](https://github.com/typelets/typelets-api/compare/v1.15.1...v1.15.2) (2025-11-19)
 
 
