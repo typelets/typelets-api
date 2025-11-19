@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/typelets/typelets-api/compare/v1.14.1...v1.15.0) (2025-11-19)
+
+
+### Features
+
+* migrate from Sentry to Grafana Cloud with OpenTelemetry ([7c49f36](https://github.com/typelets/typelets-api/commit/7c49f3602a6babde92f3ed4d2c9dd5dd17417028))
+
 ## [1.14.1](https://github.com/typelets/typelets-api/compare/v1.14.0...v1.14.1) (2025-11-05)
 
 
