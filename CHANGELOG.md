@@ -1,3 +1,10 @@
+## [1.15.5](https://github.com/typelets/typelets-api/compare/v1.15.4...v1.15.5) (2025-11-19)
+
+
+### Bug Fixes
+
+* import SeverityNumber from @opentelemetry/api-logs ([9c717c4](https://github.com/typelets/typelets-api/commit/9c717c444e3d202f41847798fd02f577cef12ed9))
+
 ## [1.15.4](https://github.com/typelets/typelets-api/compare/v1.15.3...v1.15.4) (2025-11-19)
 
 
