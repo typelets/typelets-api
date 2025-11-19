@@ -1,17 +1,18 @@
-import { trace, context } from "@opentelemetry/api";
+import { trace, context, logs, SeverityNumber } from "@opentelemetry/api";
 
 interface LogLevel {
   level: string;
   priority: number;
+  severity: SeverityNumber;
 }
 
 type LogMetadata = Record<string, string | number | boolean>;
 
 const LOG_LEVELS: Record<string, LogLevel> = {
-  error: { level: "error", priority: 0 },
-  warn: { level: "warn", priority: 1 },
-  info: { level: "info", priority: 2 },
-  debug: { level: "debug", priority: 3 },
+  error: { level: "error", priority: 0, severity: SeverityNumber.ERROR },
+  warn: { level: "warn", priority: 1, severity: SeverityNumber.WARN },
+  info: { level: "info", priority: 2, severity: SeverityNumber.INFO },
+  debug: { level: "debug", priority: 3, severity: SeverityNumber.DEBUG },
 };
 
 class Logger {
@@ -19,6 +20,7 @@ class Logger {
   private currentLogLevel: LogLevel;
   private serviceName: string;
   private serviceVersion: string;
+  private otelLogger: ReturnType<ReturnType<typeof logs.getLoggerProvider>["getLogger"]> | null;
 
   constructor() {
     this.environment = process.env.NODE_ENV || "development";
@@ -29,6 +31,15 @@ class Logger {
     const logLevelName =
       process.env.LOG_LEVEL || (this.environment === "production" ? "info" : "debug");
     this.currentLogLevel = LOG_LEVELS[logLevelName] || LOG_LEVELS.info;
+
+    // Get OpenTelemetry logger if available
+    try {
+      const loggerProvider = logs.getLoggerProvider();
+      this.otelLogger = loggerProvider.getLogger(this.serviceName, this.serviceVersion);
+    } catch (error) {
+      // OpenTelemetry not initialized, fall back to console logging
+      this.otelLogger = null;
+    }
   }
 
   private shouldLog(level: LogLevel): boolean {
@@ -117,7 +128,33 @@ class Logger {
       logData.error_type = error.name;
     }
 
-    // Use console methods based on level
+    // Emit log via OpenTelemetry if available
+    if (this.otelLogger) {
+      try {
+        this.otelLogger.emit({
+          severityNumber: level.severity,
+          severityText: level.level.toUpperCase(),
+          body: message,
+          attributes: {
+            ...meta,
+            service_name: this.serviceName,
+            service_version: this.serviceVersion,
+            environment: this.environment,
+            ...(traceContext.trace_id && { trace_id: traceContext.trace_id }),
+            ...(traceContext.span_id && { span_id: traceContext.span_id }),
+            ...(error && {
+              "error.message": error.message,
+              "error.name": error.name,
+              "error.stack": error.stack,
+            }),
+          },
+        });
+      } catch (err) {
+        // If OTEL logging fails, fall back to console
+      }
+    }
+
+    // Also log to console for CloudWatch (dual output)
     const logMessage = JSON.stringify(logData);
     switch (level.level) {
       case "error":
