@@ -1,3 +1,10 @@
+## [1.15.4](https://github.com/typelets/typelets-api/compare/v1.15.3...v1.15.4) (2025-11-19)
+
+
+### Bug Fixes
+
+* integrate logger with OpenTelemetry Logs API ([a916f2f](https://github.com/typelets/typelets-api/commit/a916f2f81988bdfd33a39a9594a3ff439bbcd253))
+
 ## [1.15.3](https://github.com/typelets/typelets-api/compare/v1.15.2...v1.15.3) (2025-11-19)
 
 
