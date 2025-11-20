@@ -1,8 +1,5 @@
 import "dotenv-flow/config";
 
-// IMPORTANT: Import instrumentation at the top to initialize OpenTelemetry
-import "./instrumentation";
-
 const isDevelopment = process.env.NODE_ENV === "development";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
