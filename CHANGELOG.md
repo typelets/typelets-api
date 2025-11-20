@@ -1,3 +1,10 @@
+## [1.15.7](https://github.com/typelets/typelets-api/compare/v1.15.6...v1.15.7) (2025-11-20)
+
+
+### Bug Fixes
+
+* use standard OTEL environment variables ([6e877a0](https://github.com/typelets/typelets-api/commit/6e877a01e0ab464ac2bb2012d49006c50e97d875))
+
 ## [1.15.6](https://github.com/typelets/typelets-api/compare/v1.15.5...v1.15.6) (2025-11-19)
 
 
