@@ -31,7 +31,12 @@ if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
     });
   };
 
-  const logRecordProcessor = new BatchLogRecordProcessor(logExporter);
+  // Configure batch processor with shorter intervals for testing
+  const logRecordProcessor = new BatchLogRecordProcessor(logExporter, {
+    maxExportBatchSize: 30, // Export when we have 30 logs
+    maxQueueSize: 100,
+    scheduledDelayMillis: 5000, // Export every 5 seconds (default is 30s)
+  });
 
   const loggerProvider = new LoggerProvider({
     resource,
@@ -41,4 +46,14 @@ if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
   logs.setGlobalLoggerProvider(loggerProvider);
 
   console.log("✅ OpenTelemetry logs configured");
+
+  // Test: emit a log immediately to verify OTLP connection
+  const testLogger = loggerProvider.getLogger("test-logger");
+  testLogger.emit({
+    severityNumber: 9, // INFO
+    severityText: "INFO",
+    body: "🧪 Test log - OTLP connection verification",
+    attributes: { test: true },
+  });
+  console.log("🧪 Test log emitted - should export in ~5 seconds");
 }
