@@ -1,4 +1,5 @@
 import "dotenv-flow/config";
+import "./logs-setup"; // Set up OpenTelemetry logs (traces/metrics via auto-instrumentation)
 
 const isDevelopment = process.env.NODE_ENV === "development";
 import { Hono } from "hono";
