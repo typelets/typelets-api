@@ -1,3 +1,10 @@
+## [1.15.8](https://github.com/typelets/typelets-api/compare/v1.15.7...v1.15.8) (2025-11-22)
+
+
+### Bug Fixes
+
+* **security:** add CSWSH protection, header redaction, and patch CVEs ([59a8262](https://github.com/typelets/typelets-api/commit/59a8262e2694e50a98f86d6e1448134b3708a0e7))
+
 ## [1.15.7](https://github.com/typelets/typelets-api/compare/v1.15.6...v1.15.7) (2025-11-20)
 
 
