@@ -1,3 +1,10 @@
+## [1.15.10](https://github.com/typelets/typelets-api/compare/v1.15.9...v1.15.10) (2025-11-22)
+
+
+### Bug Fixes
+
+* add comprehensive database/cache logging and update Grafana dashboard ([5931c0f](https://github.com/typelets/typelets-api/commit/5931c0f5f3e665a82c13c2c45ed049eda238e266))
+
 ## [1.15.9](https://github.com/typelets/typelets-api/compare/v1.15.8...v1.15.9) (2025-11-22)
 
 
