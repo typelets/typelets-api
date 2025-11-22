@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/typelets/typelets-api/compare/v1.15.10...v1.16.0) (2025-11-22)
+
+
+### Features
+
+* add public notes API for publishing encrypted notes ([76061b7](https://github.com/typelets/typelets-api/commit/76061b74fc27fb671b6399d9d2f4e4dbcbfa71b8))
+
 ## [1.15.10](https://github.com/typelets/typelets-api/compare/v1.15.9...v1.15.10) (2025-11-22)
 
 
