@@ -7,6 +7,7 @@ import {
 } from "../../lib/openapi-schemas";
 import { db, fileAttachments, notes, users } from "../../db";
 import { eq, and, sum, count, isNull, or } from "drizzle-orm";
+import { logger } from "../../lib/logger";
 
 const crudRouter = new OpenAPIHono();
 
@@ -54,6 +55,7 @@ crudRouter.openapi(getMeRoute, async (c) => {
     ? parseInt(process.env.FREE_TIER_NOTE_LIMIT)
     : 1000;
 
+  const storageStart = Date.now();
   const storageResult = await db
     .select({
       totalBytes: sum(fileAttachments.size),
@@ -61,13 +63,16 @@ crudRouter.openapi(getMeRoute, async (c) => {
     .from(fileAttachments)
     .innerJoin(notes, eq(fileAttachments.noteId, notes.id))
     .where(and(eq(notes.userId, user.id), or(isNull(notes.deleted), eq(notes.deleted, false))));
+  logger.databaseQuery("sum", "file_attachments", Date.now() - storageStart, user.id);
 
+  const noteCountStart = Date.now();
   const noteCountResult = await db
     .select({
       count: count(),
     })
     .from(notes)
     .where(and(eq(notes.userId, user.id), or(isNull(notes.deleted), eq(notes.deleted, false))));
+  logger.databaseQuery("count", "notes", Date.now() - noteCountStart, user.id);
 
   const totalBytes = storageResult[0]?.totalBytes ? Number(storageResult[0].totalBytes) : 0;
   const totalMB = Math.round((totalBytes / (1024 * 1024)) * 100) / 100;
@@ -128,7 +133,9 @@ const deleteMeRoute = createRoute({
 crudRouter.openapi(deleteMeRoute, async (c) => {
   const userId = c.get("userId");
 
+  const deleteStart = Date.now();
   await db.delete(users).where(eq(users.id, userId));
+  logger.databaseQuery("delete", "users", Date.now() - deleteStart, userId);
 
   return c.json({ message: "User account deleted successfully" }, 200);
 });

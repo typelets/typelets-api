@@ -4,6 +4,7 @@ import { eq, and, isNull, sql } from "drizzle-orm";
 import { getCache, setCache } from "../../lib/cache";
 import { CacheKeys, CacheTTL } from "../../lib/cache-keys";
 import { z } from "@hono/zod-openapi";
+import { logger } from "../../lib/logger";
 
 const countsRouter = new OpenAPIHono();
 
@@ -18,6 +19,7 @@ async function getAllDescendantFolderIds(
     return [];
   }
 
+  const queryStart = Date.now();
   // Use a recursive CTE to get all descendants in a single query
   const result = await db.execute<{ id: string }>(sql`
     WITH RECURSIVE folder_tree AS (
@@ -40,6 +42,7 @@ async function getAllDescendantFolderIds(
     )
     SELECT DISTINCT id FROM folder_tree
   `);
+  logger.databaseQuery("select_recursive", "folders", Date.now() - queryStart, userId);
 
   return (result as unknown as { id: string }[]).map((row) => row.id);
 }
@@ -58,6 +61,7 @@ async function getCountsForFolders(
     return { all: 0, starred: 0, archived: 0, trash: 0 };
   }
 
+  const queryStart = Date.now();
   // Get all counts in a single query using conditional aggregation
   const result = await db.execute<{
     all_count: string;
@@ -77,6 +81,7 @@ async function getCountsForFolders(
         sql`, `
       )})
   `);
+  logger.databaseQuery("count_aggregate", "notes", Date.now() - queryStart, userId);
 
   const rows = result as unknown as {
     all_count: string;
@@ -96,6 +101,7 @@ async function getCountsForFolders(
 // Cache warming function - call this after note/folder operations to keep cache fresh
 export async function warmNotesCountsCache(userId: string): Promise<void> {
   // Get total counts for all user's notes using single query
+  const totalCountsStart = Date.now();
   const totalCountsResult = await db.execute<{
     all_count: string;
     starred_count: string;
@@ -110,6 +116,7 @@ export async function warmNotesCountsCache(userId: string): Promise<void> {
     FROM notes
     WHERE user_id = ${userId}
   `);
+  logger.databaseQuery("count_aggregate", "notes", Date.now() - totalCountsStart, userId);
 
   const totalCountsRows = totalCountsResult as unknown as {
     all_count: string;
@@ -120,10 +127,12 @@ export async function warmNotesCountsCache(userId: string): Promise<void> {
   const totalCounts = totalCountsRows[0];
 
   // Get root-level folders (no parent)
+  const foldersStart = Date.now();
   const rootFolders = await db.query.folders.findMany({
     where: and(eq(folders.userId, userId), isNull(folders.parentId)),
     columns: { id: true },
   });
+  logger.databaseQuery("select", "folders", Date.now() - foldersStart, userId);
 
   const folderCounts: Record<
     string,
@@ -252,10 +261,12 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
       }
 
       // Get direct children of the specified folder
+      const childFoldersStart = Date.now();
       const childFolders = await db.query.folders.findMany({
         where: and(eq(folders.parentId, folderId), eq(folders.userId, userId)),
         columns: { id: true },
       });
+      logger.databaseQuery("select", "folders", Date.now() - childFoldersStart, userId);
 
       if (childFolders.length === 0) {
         // No child folders, return empty object
@@ -327,6 +338,7 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
     }
 
     // Get total counts for all user's notes using single query
+    const totalCountsStart = Date.now();
     const totalCountsResult = await db.execute<{
       all_count: string;
       starred_count: string;
@@ -341,6 +353,7 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
       FROM notes
       WHERE user_id = ${userId}
     `);
+    logger.databaseQuery("count_aggregate", "notes", Date.now() - totalCountsStart, userId);
 
     const totalCountsRows = totalCountsResult as unknown as {
       all_count: string;
@@ -351,10 +364,12 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
     const totalCounts = totalCountsRows[0];
 
     // Get root-level folders (no parent)
+    const rootFoldersStart = Date.now();
     const rootFolders = await db.query.folders.findMany({
       where: and(eq(folders.userId, userId), isNull(folders.parentId)),
       columns: { id: true },
     });
+    logger.databaseQuery("select", "folders", Date.now() - rootFoldersStart, userId);
 
     const folderCounts: Record<
       string,

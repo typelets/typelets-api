@@ -4,6 +4,7 @@ import { db, notes } from "../../db";
 import { eq, and, count } from "drizzle-orm";
 import { emptyTrashResponseSchema } from "../../lib/openapi-schemas";
 import { deleteCachePattern } from "../../lib/cache";
+import { logger } from "../../lib/logger";
 
 const trashRouter = new OpenAPIHono();
 
@@ -38,12 +39,16 @@ trashRouter.openapi(emptyTrashRoute, async (c) => {
   try {
     const userId = c.get("userId");
 
+    const countStart = Date.now();
     const [{ total }] = await db
       .select({ total: count() })
       .from(notes)
       .where(and(eq(notes.userId, userId), eq(notes.deleted, true)));
+    logger.databaseQuery("count", "notes", Date.now() - countStart, userId);
 
+    const deleteStart = Date.now();
     await db.delete(notes).where(and(eq(notes.userId, userId), eq(notes.deleted, true)));
+    logger.databaseQuery("delete", "notes", Date.now() - deleteStart, userId);
 
     // Invalidate all note counts cache for this user (global and all folders)
     await deleteCachePattern(`notes:${userId}:*`);

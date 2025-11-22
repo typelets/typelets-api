@@ -4,6 +4,7 @@ import { db, notes } from "../../db";
 import { eq, and } from "drizzle-orm";
 import { noteSchema, noteIdParamSchema } from "../../lib/openapi-schemas";
 import { invalidateNoteCounts } from "../../lib/cache";
+import { logger } from "../../lib/logger";
 
 const actionsRouter = new OpenAPIHono();
 
@@ -40,14 +41,17 @@ actionsRouter.openapi(starNoteRoute, async (c) => {
   const userId = c.get("userId");
   const { id: noteId } = c.req.valid("param");
 
+  const selectStart = Date.now();
   const existingNote = await db.query.notes.findFirst({
     where: and(eq(notes.id, noteId), eq(notes.userId, userId)),
   });
+  logger.databaseQuery("select", "notes", Date.now() - selectStart, userId);
 
   if (!existingNote) {
     throw new HTTPException(404, { message: "Note not found" });
   }
 
+  const updateStart = Date.now();
   const [updatedNote] = await db
     .update(notes)
     .set({
@@ -56,6 +60,7 @@ actionsRouter.openapi(starNoteRoute, async (c) => {
     })
     .where(eq(notes.id, noteId))
     .returning();
+  logger.databaseQuery("update", "notes", Date.now() - updateStart, userId);
 
   // Invalidate counts cache for the note's folder hierarchy
   await invalidateNoteCounts(userId, existingNote.folderId);
@@ -96,14 +101,17 @@ actionsRouter.openapi(restoreNoteRoute, async (c) => {
   const userId = c.get("userId");
   const { id: noteId } = c.req.valid("param");
 
+  const selectStart = Date.now();
   const existingNote = await db.query.notes.findFirst({
     where: and(eq(notes.id, noteId), eq(notes.userId, userId)),
   });
+  logger.databaseQuery("select", "notes", Date.now() - selectStart, userId);
 
   if (!existingNote) {
     throw new HTTPException(404, { message: "Note not found" });
   }
 
+  const updateStart = Date.now();
   const [restoredNote] = await db
     .update(notes)
     .set({
@@ -113,6 +121,7 @@ actionsRouter.openapi(restoreNoteRoute, async (c) => {
     })
     .where(eq(notes.id, noteId))
     .returning();
+  logger.databaseQuery("update", "notes", Date.now() - updateStart, userId);
 
   // Invalidate counts cache for the note's folder hierarchy
   await invalidateNoteCounts(userId, existingNote.folderId);
@@ -156,9 +165,11 @@ actionsRouter.openapi(hideNoteRoute, async (c) => {
   const userId = c.get("userId");
   const { id: noteId } = c.req.valid("param");
 
+  const selectStart = Date.now();
   const existingNote = await db.query.notes.findFirst({
     where: and(eq(notes.id, noteId), eq(notes.userId, userId)),
   });
+  logger.databaseQuery("select", "notes", Date.now() - selectStart, userId);
 
   if (!existingNote) {
     throw new HTTPException(404, { message: "Note not found" });
@@ -168,6 +179,7 @@ actionsRouter.openapi(hideNoteRoute, async (c) => {
     throw new HTTPException(400, { message: "Note is already hidden" });
   }
 
+  const updateStart = Date.now();
   const [hiddenNote] = await db
     .update(notes)
     .set({
@@ -177,6 +189,7 @@ actionsRouter.openapi(hideNoteRoute, async (c) => {
     })
     .where(eq(notes.id, noteId))
     .returning();
+  logger.databaseQuery("update", "notes", Date.now() - updateStart, userId);
 
   // Invalidate counts cache for the note's folder hierarchy
   await invalidateNoteCounts(userId, existingNote.folderId);
@@ -220,9 +233,11 @@ actionsRouter.openapi(unhideNoteRoute, async (c) => {
   const userId = c.get("userId");
   const { id: noteId } = c.req.valid("param");
 
+  const selectStart = Date.now();
   const existingNote = await db.query.notes.findFirst({
     where: and(eq(notes.id, noteId), eq(notes.userId, userId)),
   });
+  logger.databaseQuery("select", "notes", Date.now() - selectStart, userId);
 
   if (!existingNote) {
     throw new HTTPException(404, { message: "Note not found" });
@@ -232,6 +247,7 @@ actionsRouter.openapi(unhideNoteRoute, async (c) => {
     throw new HTTPException(400, { message: "Note is not hidden" });
   }
 
+  const updateStart = Date.now();
   const [unhiddenNote] = await db
     .update(notes)
     .set({
@@ -241,6 +257,7 @@ actionsRouter.openapi(unhideNoteRoute, async (c) => {
     })
     .where(eq(notes.id, noteId))
     .returning();
+  logger.databaseQuery("update", "notes", Date.now() - updateStart, userId);
 
   // Invalidate counts cache for the note's folder hierarchy
   await invalidateNoteCounts(userId, existingNote.folderId);

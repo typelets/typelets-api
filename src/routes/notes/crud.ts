@@ -13,6 +13,7 @@ import {
   noteIdParamSchema,
 } from "../../lib/openapi-schemas";
 import { invalidateNoteCounts, invalidateNoteCountsForMove } from "../../lib/cache";
+import { logger } from "../../lib/logger";
 
 const crudRouter = new OpenAPIHono();
 
@@ -91,12 +92,15 @@ const listNotesHandler: RouteHandler<typeof listNotesRoute> = async (c) => {
 
   const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0];
 
+  const countStart = Date.now();
   const [{ total }] = await db.select({ total: count() }).from(notes).where(whereClause);
+  logger.databaseQuery("count", "notes", Date.now() - countStart, userId);
 
   const page = query.page || 1;
   const limit = query.limit || 20;
   const offset = (page - 1) * limit;
 
+  const selectStart = Date.now();
   const userNotes = await db.query.notes.findMany({
     where: whereClause,
     orderBy: [desc(notes.updatedAt)],
@@ -122,6 +126,7 @@ const listNotesHandler: RouteHandler<typeof listNotesRoute> = async (c) => {
       },
     },
   });
+  logger.databaseQuery("select", "notes", Date.now() - selectStart, userId);
 
   // Add attachment counts to notes
   const notesWithAttachmentCount = userNotes.map((note) => ({
@@ -207,12 +212,14 @@ crudRouter.openapi(getNoteRoute, async (c) => {
   const userId = c.get("userId");
   const { id: noteId } = c.req.valid("param");
 
+  const selectStart = Date.now();
   const note = await db.query.notes.findFirst({
     where: and(eq(notes.id, noteId), eq(notes.userId, userId)),
     with: {
       folder: true,
     },
   });
+  logger.databaseQuery("select", "notes", Date.now() - selectStart, userId);
 
   if (!note) {
     throw new HTTPException(404, { message: "Note not found" });
@@ -279,6 +286,7 @@ const createNoteHandler: RouteHandler<typeof createNoteRoute> = async (c) => {
     salt?: string;
   };
 
+  const insertStart = Date.now();
   const [newNote] = await db
     .insert(notes)
     .values({
@@ -286,6 +294,7 @@ const createNoteHandler: RouteHandler<typeof createNoteRoute> = async (c) => {
       userId,
     })
     .returning();
+  logger.databaseQuery("insert", "notes", Date.now() - insertStart, userId);
 
   // Invalidate counts cache for the user and all ancestor folders
   await invalidateNoteCounts(userId, validatedData.folderId ?? null);
@@ -388,14 +397,17 @@ crudRouter.openapi(updateNoteRoute, async (c) => {
   const data = await c.req.json();
   const validatedData = updateNoteSchema.parse(data);
 
+  const selectStart = Date.now();
   const existingNote = await db.query.notes.findFirst({
     where: and(eq(notes.id, noteId), eq(notes.userId, userId)),
   });
+  logger.databaseQuery("select", "notes", Date.now() - selectStart, userId);
 
   if (!existingNote) {
     throw new HTTPException(404, { message: "Note not found" });
   }
 
+  const updateStart = Date.now();
   const [updatedNote] = await db
     .update(notes)
     .set({
@@ -404,6 +416,7 @@ crudRouter.openapi(updateNoteRoute, async (c) => {
     })
     .where(eq(notes.id, noteId))
     .returning();
+  logger.databaseQuery("update", "notes", Date.now() - updateStart, userId);
 
   // Invalidate counts cache - check if note moved between folders
   const oldFolderId = existingNote.folderId;
@@ -454,14 +467,17 @@ crudRouter.openapi(deleteNoteRoute, async (c) => {
   const userId = c.get("userId");
   const { id: noteId } = c.req.valid("param");
 
+  const selectStart = Date.now();
   const existingNote = await db.query.notes.findFirst({
     where: and(eq(notes.id, noteId), eq(notes.userId, userId)),
   });
+  logger.databaseQuery("select", "notes", Date.now() - selectStart, userId);
 
   if (!existingNote) {
     throw new HTTPException(404, { message: "Note not found" });
   }
 
+  const updateStart = Date.now();
   const [deletedNote] = await db
     .update(notes)
     .set({
@@ -470,6 +486,7 @@ crudRouter.openapi(deleteNoteRoute, async (c) => {
     })
     .where(eq(notes.id, noteId))
     .returning();
+  logger.databaseQuery("update", "notes", Date.now() - updateStart, userId);
 
   // Invalidate counts cache for the note's folder hierarchy
   await invalidateNoteCounts(userId, existingNote.folderId);

@@ -376,12 +376,11 @@ class Logger {
       userId: userId || "anonymous",
     };
 
-    // Log slow queries at info level (visible in production)
+    // Log all queries at info level for production visibility
     if (duration > 1000) {
       this.warn(`[DB] Slow query: ${operation} ${table} took ${duration}ms`, meta);
     } else {
-      // Fast queries only logged in debug (dev-only)
-      this.debug(`[DB] ${operation} ${table}`, meta);
+      this.info(`[DB] ${operation} ${table}`, meta);
     }
   }
 
@@ -464,8 +463,8 @@ class Logger {
       meta.keyCount = keyCount;
     }
 
-    // Log at debug level
-    this.debug(`[CACHE] ${operation}${hit !== undefined ? (hit ? " HIT" : " MISS") : ""}`, meta);
+    // Log at info level for production visibility
+    this.info(`[CACHE] ${operation}${hit !== undefined ? (hit ? " HIT" : " MISS") : ""}`, meta);
   }
 
   cacheError(operation: string, key: string, error: Error): void {
