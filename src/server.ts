@@ -23,6 +23,7 @@ import countsRouter from "./routes/notes/counts";
 import usersRouter from "./routes/users/crud";
 import filesRouter from "./routes/files/crud";
 import codeRouter from "./routes/code/crud";
+import publicNotesRouter from "./routes/public-notes/crud";
 import { VERSION } from "./version";
 import { logger, sanitizeHeaders } from "./lib/logger";
 
@@ -218,6 +219,7 @@ app.get("/api/openapi.json", (c) => {
   const codeDoc = (codeRouter as OpenAPIRouter).getOpenAPIDocument({});
   const foldersCrudDoc = (foldersCrudRouter as OpenAPIRouter).getOpenAPIDocument({});
   const foldersActionsDoc = (foldersActionsRouter as OpenAPIRouter).getOpenAPIDocument({});
+  const publicNotesDoc = (publicNotesRouter as OpenAPIRouter).getOpenAPIDocument({});
 
   // Merge paths from all routers into usersDoc
   if (!usersDoc.paths) {
@@ -296,6 +298,14 @@ app.get("/api/openapi.json", (c) => {
     });
   }
 
+  // Merge public-notes paths with /api/public-notes prefix
+  if (publicNotesDoc.paths) {
+    Object.keys(publicNotesDoc.paths).forEach((path) => {
+      const fullPath = path === "" || path === "/" ? "/api/public-notes" : `/api/public-notes${path}`;
+      usersDoc.paths[fullPath] = publicNotesDoc.paths[path];
+    });
+  }
+
   // Merge schemas from all routers
   if (!usersDoc.components) {
     usersDoc.components = {};
@@ -336,6 +346,10 @@ app.get("/api/openapi.json", (c) => {
     Object.assign(usersDoc.components.schemas, foldersActionsDoc.components.schemas);
   }
 
+  if (publicNotesDoc.components?.schemas) {
+    Object.assign(usersDoc.components.schemas, publicNotesDoc.components.schemas);
+  }
+
   // Manually add securitySchemes to components
   usersDoc.components.securitySchemes = {
     Bearer: {
@@ -359,6 +373,24 @@ app.get("/websocket/status", (c) => {
     stats: wsManager.getConnectionStats(),
     timestamp: new Date().toISOString(),
   });
+});
+
+// Public endpoint for viewing public notes (NO AUTH REQUIRED)
+// Must be registered BEFORE auth middleware
+app.get("/api/public-notes/:slug", async (c) => {
+  const slug = c.req.param("slug");
+  // Skip if slug looks like "note" (to allow /api/public-notes/note/:noteId to use auth)
+  if (slug === "note") {
+    return c.notFound();
+  }
+  // Forward to the router handler
+  const response = await publicNotesRouter.fetch(
+    new Request(`http://localhost/${slug}`, {
+      method: "GET",
+      headers: c.req.raw.headers,
+    })
+  );
+  return response;
 });
 
 app.use("*", authMiddleware);
@@ -396,6 +428,7 @@ app.route("/api/notes", crudRouter);
 app.route("/api/notes", actionsRouter);
 app.route("/api/code", codeRouter);
 app.route("/api", filesRouter);
+app.route("/api/public-notes", publicNotesRouter);
 
 app.onError((err, c) => {
   // Generate unique error ID for tracking

@@ -153,6 +153,49 @@ export const fileAttachmentsRelations = relations(fileAttachments, ({ one }) => 
   }),
 }));
 
+export const publicNotes = pgTable(
+  "public_notes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: text("slug").unique().notNull(), // URL-friendly identifier (e.g., "abc123xyz")
+    noteId: uuid("note_id")
+      .references(() => notes.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: text("user_id")
+      .references(() => users.id, { onDelete: "cascade" })
+      .notNull(),
+    title: text("title").notNull(), // Plaintext title (NOT encrypted)
+    content: text("content").notNull(), // Plaintext HTML content (NOT encrypted)
+    type: text("type", { enum: ["note", "diagram", "code"] })
+      .default("note")
+      .notNull(),
+    authorName: text("author_name"), // Optional display name
+    publishedAt: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    slugIdx: index("idx_public_notes_slug").on(table.slug),
+    noteIdIdx: index("idx_public_notes_note_id").on(table.noteId),
+    userIdIdx: index("idx_public_notes_user_id").on(table.userId),
+  })
+);
+
+/**
+ * Public note relations - defines relationship between public notes, notes, and users
+ * Used by Drizzle's relational query API (db.query.publicNotes.*)
+ * @important Do not remove - required for db.query.* to work properly
+ */
+export const publicNotesRelations = relations(publicNotes, ({ one }) => ({
+  note: one(notes, {
+    fields: [publicNotes.noteId],
+    references: [notes.id],
+  }),
+  user: one(users, {
+    fields: [publicNotes.userId],
+    references: [users.id],
+  }),
+}));
+
 export type User = typeof users.$inferSelect;
 export type UserInsert = typeof users.$inferInsert;
 export type Note = typeof notes.$inferSelect;
@@ -161,3 +204,5 @@ export type Folder = typeof folders.$inferSelect; // Now includes sortOrder: num
 export type FolderInsert = typeof folders.$inferInsert;
 export type FileAttachment = typeof fileAttachments.$inferSelect;
 export type FileAttachmentInsert = typeof fileAttachments.$inferInsert;
+export type PublicNote = typeof publicNotes.$inferSelect;
+export type PublicNoteInsert = typeof publicNotes.$inferInsert;
