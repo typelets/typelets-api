@@ -346,6 +346,22 @@ export const noteSchema = z
       .datetime()
       .openapi({ example: "2025-01-01T00:00:00.000Z", description: "Updated date" }),
     folder: folderSchema.nullable().optional().openapi({ description: "Associated folder" }),
+    // Publish status fields (from LEFT JOIN with public_notes)
+    isPublished: z
+      .boolean()
+      .openapi({ example: false, description: "Whether note has a public version" }),
+    publicSlug: z
+      .string()
+      .nullable()
+      .openapi({ example: "a1b2c3d4e5", description: "Public note slug (null if not published)" }),
+    publishedAt: z.string().datetime().nullable().openapi({
+      example: "2025-01-01T00:00:00.000Z",
+      description: "When note was published (null if not published)",
+    }),
+    publicUpdatedAt: z.string().datetime().nullable().openapi({
+      example: "2025-01-01T00:00:00.000Z",
+      description: "When public note was last updated (null if not published)",
+    }),
   })
   .openapi("Note");
 
@@ -758,3 +774,147 @@ export const tokenParamSchema = z.object({
       description: "Submission token",
     }),
 });
+
+// Public notes schemas
+export const publicNoteSchema = z
+  .object({
+    id: z
+      .string()
+      .uuid()
+      .openapi({ example: "123e4567-e89b-12d3-a456-426614174000", description: "Public note ID" }),
+    slug: z.string().openapi({ example: "a1b2c3d4e5", description: "URL-friendly slug" }),
+    noteId: z.string().uuid().openapi({
+      example: "123e4567-e89b-12d3-a456-426614174001",
+      description: "Original note ID",
+    }),
+    userId: z.string().openapi({ example: "user_2abc123", description: "User ID" }),
+    title: z.string().openapi({ example: "My Public Note", description: "Plaintext note title" }),
+    content: z
+      .string()
+      .openapi({ example: "<p>Note content...</p>", description: "Plaintext HTML content" }),
+    type: z
+      .enum(["note", "diagram", "code"])
+      .openapi({ example: "note", description: "Note type" }),
+    authorName: z
+      .string()
+      .nullable()
+      .openapi({ example: "John Doe", description: "Optional author display name" }),
+    publishedAt: z
+      .string()
+      .datetime()
+      .openapi({ example: "2025-01-01T00:00:00.000Z", description: "Published date" }),
+    updatedAt: z
+      .string()
+      .datetime()
+      .openapi({ example: "2025-01-01T00:00:00.000Z", description: "Last updated date" }),
+  })
+  .openapi("PublicNote");
+
+// Public-facing schema (excludes sensitive fields: id, noteId, userId)
+export const publicNoteViewSchema = z
+  .object({
+    slug: z.string().openapi({ example: "a1b2c3d4e5", description: "URL-friendly slug" }),
+    title: z.string().openapi({ example: "My Public Note", description: "Plaintext note title" }),
+    content: z
+      .string()
+      .openapi({ example: "<p>Note content...</p>", description: "Plaintext HTML content" }),
+    type: z
+      .enum(["note", "diagram", "code"])
+      .openapi({ example: "note", description: "Note type" }),
+    authorName: z
+      .string()
+      .nullable()
+      .openapi({ example: "John Doe", description: "Optional author display name" }),
+    publishedAt: z
+      .string()
+      .datetime()
+      .openapi({ example: "2025-01-01T00:00:00.000Z", description: "Published date" }),
+    updatedAt: z
+      .string()
+      .datetime()
+      .openapi({ example: "2025-01-01T00:00:00.000Z", description: "Last updated date" }),
+  })
+  .openapi("PublicNoteView");
+
+export const publishNoteRequestSchema = z
+  .object({
+    noteId: z.string().uuid().openapi({
+      example: "123e4567-e89b-12d3-a456-426614174001",
+      description: "Note ID to publish",
+    }),
+    title: z
+      .string()
+      .min(1)
+      .max(500)
+      .openapi({ example: "My Public Note", description: "Plaintext title (decrypted by client)" }),
+    content: z
+      .string()
+      .max(5 * 1024 * 1024) // 5MB max
+      .openapi({ example: "<p>Note content...</p>", description: "Plaintext HTML content" }),
+    type: z
+      .enum(["note", "diagram", "code"])
+      .optional()
+      .openapi({ example: "note", description: "Note type (defaults to 'note')" }),
+    authorName: z
+      .string()
+      .max(255)
+      .optional()
+      .openapi({ example: "John Doe", description: "Optional author display name" }),
+  })
+  .openapi("PublishNoteRequest");
+
+export const updatePublicNoteRequestSchema = z
+  .object({
+    title: z
+      .string()
+      .min(1)
+      .max(500)
+      .optional()
+      .openapi({ example: "Updated Title", description: "Updated plaintext title" }),
+    content: z
+      .string()
+      .max(5 * 1024 * 1024) // 5MB max
+      .optional()
+      .openapi({
+        example: "<p>Updated content...</p>",
+        description: "Updated plaintext HTML content",
+      }),
+    authorName: z
+      .string()
+      .max(255)
+      .nullable()
+      .optional()
+      .openapi({ example: "Jane Doe", description: "Updated author display name" }),
+  })
+  .openapi("UpdatePublicNoteRequest");
+
+export const publicNoteSlugParamSchema = z.object({
+  slug: z
+    .string()
+    .min(1)
+    .openapi({
+      param: { name: "slug", in: "path" },
+      example: "a1b2c3d4e5",
+      description: "Public note slug",
+    }),
+});
+
+export const publicNoteNoteIdParamSchema = z.object({
+  noteId: z
+    .string()
+    .uuid()
+    .openapi({
+      param: { name: "noteId", in: "path" },
+      example: "123e4567-e89b-12d3-a456-426614174001",
+      description: "Original note ID",
+    }),
+});
+
+export const unpublishNoteResponseSchema = z
+  .object({
+    message: z.string().openapi({
+      example: "Note unpublished successfully",
+      description: "Success message",
+    }),
+  })
+  .openapi("UnpublishNoteResponse");

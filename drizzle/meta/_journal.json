@@ -15,6 +15,13 @@
       "when": 1761780448921,
       "tag": "0001_far_winter_soldier",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1763844333301,
+      "tag": "0002_mixed_bulldozer",
+      "breakpoints": true
     }
   ]
 }

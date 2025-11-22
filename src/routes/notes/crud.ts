@@ -1,8 +1,8 @@
 import { OpenAPIHono, createRoute, RouteHandler } from "@hono/zod-openapi";
 import { HTTPException } from "hono/http-exception";
-import { db, notes } from "../../db";
+import { db, notes, publicNotes } from "../../db";
 import { createNoteSchema, updateNoteSchema } from "../../lib/validation";
-import { eq, and, desc, or, ilike, count, SQL } from "drizzle-orm";
+import { eq, and, desc, or, ilike, count, SQL, inArray } from "drizzle-orm";
 import { checkNoteLimits } from "../../middleware/usage";
 import {
   noteSchema,
@@ -128,11 +128,46 @@ const listNotesHandler: RouteHandler<typeof listNotesRoute> = async (c) => {
   });
   logger.databaseQuery("select", "notes", Date.now() - selectStart, userId);
 
-  // Add attachment counts to notes
-  const notesWithAttachmentCount = userNotes.map((note) => ({
-    ...note,
-    attachmentCount: note.attachments.length,
-  }));
+  // Fetch publish status for all notes in one query
+  const noteIds = userNotes.map((note) => note.id);
+  let publishStatusMap = new Map<
+    string,
+    { slug: string; publishedAt: Date; updatedAt: Date }
+  >();
+
+  if (noteIds.length > 0) {
+    const publishStart = Date.now();
+    const publishedNotes = await db
+      .select({
+        noteId: publicNotes.noteId,
+        slug: publicNotes.slug,
+        publishedAt: publicNotes.publishedAt,
+        updatedAt: publicNotes.updatedAt,
+      })
+      .from(publicNotes)
+      .where(inArray(publicNotes.noteId, noteIds));
+    logger.databaseQuery("select", "public_notes", Date.now() - publishStart, userId);
+
+    publishStatusMap = new Map(
+      publishedNotes.map((pn) => [
+        pn.noteId,
+        { slug: pn.slug, publishedAt: pn.publishedAt, updatedAt: pn.updatedAt },
+      ])
+    );
+  }
+
+  // Add attachment counts and publish status to notes
+  const notesWithAttachmentCount = userNotes.map((note) => {
+    const publishStatus = publishStatusMap.get(note.id);
+    return {
+      ...note,
+      attachmentCount: note.attachments.length,
+      isPublished: !!publishStatus,
+      publicSlug: publishStatus?.slug ?? null,
+      publishedAt: publishStatus?.publishedAt?.toISOString() ?? null,
+      publicUpdatedAt: publishStatus?.updatedAt?.toISOString() ?? null,
+    };
+  });
 
   return c.json(
     {
@@ -225,7 +260,27 @@ crudRouter.openapi(getNoteRoute, async (c) => {
     throw new HTTPException(404, { message: "Note not found" });
   }
 
-  return c.json(note, 200);
+  // Fetch publish status
+  const publishStart = Date.now();
+  const publishedNote = await db.query.publicNotes.findFirst({
+    where: eq(publicNotes.noteId, noteId),
+    columns: {
+      slug: true,
+      publishedAt: true,
+      updatedAt: true,
+    },
+  });
+  logger.databaseQuery("select", "public_notes", Date.now() - publishStart, userId);
+
+  const noteWithPublishStatus = {
+    ...note,
+    isPublished: !!publishedNote,
+    publicSlug: publishedNote?.slug ?? null,
+    publishedAt: publishedNote?.publishedAt?.toISOString() ?? null,
+    publicUpdatedAt: publishedNote?.updatedAt?.toISOString() ?? null,
+  };
+
+  return c.json(noteWithPublishStatus, 200);
 });
 
 // POST /api/notes - Create a new note
