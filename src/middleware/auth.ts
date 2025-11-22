@@ -6,6 +6,29 @@ import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import type { ClerkUserData, ClerkJWTPayload, UserUpdateData, DatabaseError } from "../types";
 
+/**
+ * Extract client IP from request headers (supports proxies like Cloudflare, ALB)
+ */
+const getClientIp = (c: Context): string => {
+  // Check headers in order of priority
+  const xForwardedFor = c.req.header("x-forwarded-for");
+  if (xForwardedFor) {
+    // First IP in the list is the original client
+    return xForwardedFor.split(",")[0].trim();
+  }
+
+  const xRealIp = c.req.header("x-real-ip");
+  if (xRealIp) return xRealIp;
+
+  const cfConnectingIp = c.req.header("cf-connecting-ip");
+  if (cfConnectingIp) return cfConnectingIp;
+
+  // Fallback to socket remote address
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const socket = (c.req.raw as any).socket;
+  return socket?.remoteAddress || "unknown";
+};
+
 if (!process.env.CLERK_SECRET_KEY) {
   throw new Error(
     "Missing Clerk Secret Key - Please add CLERK_SECRET_KEY to your environment variables"
@@ -49,6 +72,7 @@ const extractAndVerifyClerkToken = async (c: Context): Promise<ClerkUserData | n
 };
 
 export const authMiddleware = async (c: Context, next: Next) => {
+  const clientIp = getClientIp(c);
   const userData = await extractAndVerifyClerkToken(c);
 
   if (!userData) {
@@ -57,6 +81,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
       event_type: "auth_failure",
       reason: "Invalid or missing token",
       path: new URL(c.req.url).pathname,
+      "http.client_ip": clientIp,
     });
     throw new HTTPException(401, {
       message: "Authentication required",
@@ -77,6 +102,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
         error: error instanceof Error ? error.message : String(error),
         type: "database_error",
         event_type: "database_error",
+        "http.client_ip": clientIp,
       },
       error instanceof Error ? error : undefined
     );
@@ -110,6 +136,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
       logger.info("[AUTH] New user - fetching details from Clerk", {
         userId: userData.id,
         type: "auth_event",
+        "http.client_ip": clientIp,
       });
 
       // Fetch user details from Clerk API
@@ -126,6 +153,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
         logger.error("[AUTH] Cannot create user - no email found in Clerk", {
           userId: userData.id,
           type: "auth_error",
+          "http.client_ip": clientIp,
         });
         throw new HTTPException(500, {
           message: "User profile incomplete - email required",
@@ -160,6 +188,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
         email: newUser.email,
         type: "auth_event",
         event_type: "user_created",
+        "http.client_ip": clientIp,
       });
 
       existingUser = newUser;
@@ -169,6 +198,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
         logger.error("[AUTH] User not found in Clerk", {
           userId: userData.id,
           type: "auth_error",
+          "http.client_ip": clientIp,
         });
         throw new HTTPException(401, {
           message: "User account not found",
@@ -190,6 +220,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
             logger.error("[AUTH] User not found after race condition", {
               userId: userData.id,
               type: "database_error",
+              "http.client_ip": clientIp,
             });
             throw new HTTPException(500, {
               message: "Failed to create or find user profile",
@@ -202,6 +233,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
               userId: userData.id,
               error: lookupError instanceof Error ? lookupError.message : String(lookupError),
               type: "database_error",
+              "http.client_ip": clientIp,
             },
             lookupError instanceof Error ? lookupError : undefined
           );
@@ -215,6 +247,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
           {
             userId: userData.id,
             error: error instanceof Error ? error.message : String(error),
+            "http.client_ip": clientIp,
           },
           error instanceof Error ? error : undefined
         );
@@ -235,6 +268,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
     event_type: "auth_success",
     "user.id": userData.id,
     "user.email": existingUser.email,
+    "http.client_ip": clientIp,
   });
 
   // User context available in Hono context
