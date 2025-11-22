@@ -81,3 +81,7 @@ deploy.local.ps1
 *.local.bat
 *.local.ps1
 deployment-scripts/
+
+# ECS task definitions - contain secrets, DO NOT COMMIT
+ecs-task-definition*.json
+*task-definition*.json

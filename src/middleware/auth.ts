@@ -1,6 +1,6 @@
 import { Context, Next } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { verifyToken } from "@clerk/backend";
+import { verifyToken, clerkClient } from "@clerk/backend";
 import { db, users, folders, type User } from "../db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
@@ -21,7 +21,6 @@ declare module "hono" {
 }
 
 const extractAndVerifyClerkToken = async (c: Context): Promise<ClerkUserData | null> => {
-  const startTime = Date.now();
   const authHeader = c.req.header("Authorization");
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -31,16 +30,13 @@ const extractAndVerifyClerkToken = async (c: Context): Promise<ClerkUserData | n
   const token = authHeader.split(" ")[1];
 
   try {
-    const verifyStart = Date.now();
     const payload = (await verifyToken(token, {
       secretKey: process.env.CLERK_SECRET_KEY!,
     })) as unknown as ClerkJWTPayload;
-    console.log(`[AUTH PERF] verifyToken took: ${Date.now() - verifyStart}ms`);
 
     // Security is maintained by JWT verification above
     // User metadata comes from our DB (updated via webhooks or on login)
     // No need to call Clerk API on every request - saves 150-200ms
-    console.log(`[AUTH PERF] Total extractAndVerify took: ${Date.now() - startTime}ms`);
     return {
       id: payload.sub,
       email: "", // Will be populated from DB
@@ -53,20 +49,41 @@ const extractAndVerifyClerkToken = async (c: Context): Promise<ClerkUserData | n
 };
 
 export const authMiddleware = async (c: Context, next: Next) => {
-  const middlewareStart = Date.now();
   const userData = await extractAndVerifyClerkToken(c);
 
   if (!userData) {
+    logger.warn("[AUTH] Authentication failed", {
+      type: "auth_event",
+      event_type: "auth_failure",
+      reason: "Invalid or missing token",
+      path: new URL(c.req.url).pathname,
+    });
     throw new HTTPException(401, {
       message: "Authentication required",
     });
   }
 
-  const dbQueryStart = Date.now();
-  let existingUser = await db.query.users.findFirst({
-    where: eq(users.id, userData.id),
-  });
-  console.log(`[AUTH PERF] DB user lookup took: ${Date.now() - dbQueryStart}ms`);
+  // Look up user in database with proper error handling
+  let existingUser: User | undefined;
+  try {
+    existingUser = await db.query.users.findFirst({
+      where: eq(users.id, userData.id),
+    });
+  } catch (error) {
+    logger.error(
+      "[AUTH] Database error during user lookup",
+      {
+        userId: userData.id,
+        error: error instanceof Error ? error.message : String(error),
+        type: "database_error",
+        event_type: "database_error",
+      },
+      error instanceof Error ? error : undefined
+    );
+    throw new HTTPException(503, {
+      message: "Database temporarily unavailable. Please try again.",
+    });
+  }
 
   if (existingUser) {
     try {
@@ -88,14 +105,40 @@ export const authMiddleware = async (c: Context, next: Next) => {
       // Silently ignore update errors - user will still be authenticated with existing data
     }
   } else {
+    // User doesn't exist, fetch details from Clerk and create
     try {
+      logger.info("[AUTH] New user - fetching details from Clerk", {
+        userId: userData.id,
+        type: "auth_event",
+      });
+
+      // Fetch user details from Clerk API
+      const clerkUser = await clerkClient().users.getUser(userData.id);
+
+      const email =
+        clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
+          ?.emailAddress ||
+        clerkUser.emailAddresses[0]?.emailAddress ||
+        "";
+
+      // Email is required - if we don't have it, we can't create the user
+      if (!email) {
+        logger.error("[AUTH] Cannot create user - no email found in Clerk", {
+          userId: userData.id,
+          type: "auth_error",
+        });
+        throw new HTTPException(500, {
+          message: "User profile incomplete - email required",
+        });
+      }
+
       const [newUser] = await db
         .insert(users)
         .values({
           id: userData.id,
-          email: userData.email || "",
-          firstName: userData.firstName,
-          lastName: userData.lastName,
+          email: email,
+          firstName: clerkUser.firstName,
+          lastName: clerkUser.lastName,
         })
         .returning();
 
@@ -112,25 +155,63 @@ export const authMiddleware = async (c: Context, next: Next) => {
         }))
       );
 
+      logger.info("[AUTH] New user created successfully", {
+        userId: newUser.id,
+        email: newUser.email,
+        type: "auth_event",
+        event_type: "user_created",
+      });
+
       existingUser = newUser;
     } catch (error: unknown) {
+      // Check if this is a Clerk API error
+      if (error instanceof Error && error.message.includes("Resource not found")) {
+        logger.error("[AUTH] User not found in Clerk", {
+          userId: userData.id,
+          type: "auth_error",
+        });
+        throw new HTTPException(401, {
+          message: "User account not found",
+        });
+      }
+
       const dbError = error as DatabaseError;
       if (
         dbError.code === "23505" &&
         (dbError.constraint_name === "users_pkey" || dbError.detail?.includes("already exists"))
       ) {
-        existingUser = await db.query.users.findFirst({
-          where: eq(users.id, userData.id),
-        });
+        // Race condition: another request created this user. Try to fetch again.
+        try {
+          existingUser = await db.query.users.findFirst({
+            where: eq(users.id, userData.id),
+          });
 
-        if (!existingUser) {
-          throw new HTTPException(500, {
-            message: "Failed to create or find user profile",
+          if (!existingUser) {
+            logger.error("[AUTH] User not found after race condition", {
+              userId: userData.id,
+              type: "database_error",
+            });
+            throw new HTTPException(500, {
+              message: "Failed to create or find user profile",
+            });
+          }
+        } catch (lookupError) {
+          logger.error(
+            "[AUTH] Database error during user lookup after race condition",
+            {
+              userId: userData.id,
+              error: lookupError instanceof Error ? lookupError.message : String(lookupError),
+              type: "database_error",
+            },
+            lookupError instanceof Error ? lookupError : undefined
+          );
+          throw new HTTPException(503, {
+            message: "Database temporarily unavailable. Please try again.",
           });
         }
       } else {
         logger.error(
-          "[DB] Error creating user",
+          "[AUTH] Error creating user",
           {
             userId: userData.id,
             error: error instanceof Error ? error.message : String(error),
@@ -148,7 +229,13 @@ export const authMiddleware = async (c: Context, next: Next) => {
   c.set("user", existingUser);
   c.set("clerkUser", userData);
 
-  console.log(`[AUTH PERF] Total auth middleware took: ${Date.now() - middlewareStart}ms`);
+  // Log successful authentication for security monitoring
+  logger.info("[AUTH] Authentication successful", {
+    type: "auth_event",
+    event_type: "auth_success",
+    "user.id": userData.id,
+    "user.email": existingUser.email,
+  });
 
   // User context available in Hono context
 

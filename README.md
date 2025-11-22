@@ -24,7 +24,6 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
   - [Public Endpoints](#public-endpoints)
   - [Authentication](#authentication)
   - [Interactive Documentation](#interactive-documentation)
-  - [WebSocket Real-time Sync](#websocket-real-time-sync)
 - [Database Schema](#database-schema)
 - [Security Features](#security-features)
 - [Environment Variables](#environment-variables)
@@ -54,13 +53,12 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - 📎 **File Attachments** with encrypted storage
 - 🏷️ **Tags & Search** for easy note discovery
 - 🗑️ **Trash & Archive** functionality
-- 🔄 **Real-time Sync** via WebSockets for multi-device support
 - ⚡ **Fast & Type-Safe** with TypeScript and Hono
 - 🐘 **PostgreSQL** with Drizzle ORM
 - 🚀 **Valkey/Redis Caching** for high-performance data access with cluster support
 - 📊 **Observability** with Grafana Cloud and OpenTelemetry for distributed tracing, metrics, and logging
-- 💻 **Code Execution** via secure Judge0 API proxy
-- 🛡️ **Comprehensive Rate Limiting** for HTTP, WebSocket, file uploads, and code execution
+- 💻 **Code Execution** via self-hosted Piston engine
+- 🛡️ **Comprehensive Rate Limiting** for HTTP, file uploads, and code execution
 - 🏥 **Health Checks** with detailed system status and readiness probes
 - 📈 **Structured Logging** with automatic event tracking and error capture
 
@@ -84,7 +82,7 @@ The backend API for the [Typelets Application](https://github.com/typelets/typel
 - Clerk account for authentication ([sign up here](https://dashboard.clerk.com))
 - Valkey/Redis cluster for caching (optional - improves performance)
 - Grafana Cloud account for monitoring (optional - [sign up here](https://grafana.com/products/cloud/))
-- Judge0 API key for code execution (optional - [get from RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce))
+- Piston code execution engine (optional - [self-hosted](https://github.com/engineer-man/piston))
 
 ## Local Development Setup
 
@@ -119,14 +117,14 @@ cp .env.example .env
 4. **Configure environment variables:**
    - Create a free account at [Clerk Dashboard](https://dashboard.clerk.com)
    - Create a new application
-   - (Optional) Get Judge0 API key from [RapidAPI](https://rapidapi.com/judge0-official/api/judge0-ce)
+   - (Optional) Set up self-hosted [Piston](https://github.com/engineer-man/piston) for code execution
    - Update `.env` with your settings:
 
    ```env
    CLERK_SECRET_KEY=sk_test_your_actual_clerk_secret_key_from_dashboard
    CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-   # Optional: For code execution features
-   JUDGE0_API_KEY=your_judge0_rapidapi_key_here
+   # Optional: For code execution features (self-hosted Piston)
+   PISTON_API_URL=http://localhost:2000
    ```
 
 5. **Set up database schema:**
@@ -142,8 +140,6 @@ pnpm run dev
 ```
 
 🎉 **Your API is now running at `http://localhost:3000`**
-
-**WebSocket connection available at: `ws://localhost:3000`**
 
 The development server will automatically restart when you make changes to any TypeScript files.
 
@@ -208,16 +204,15 @@ The API provides comprehensive REST endpoints for:
 - **Folders** - Hierarchical folder organization with nested support
 - **Notes** - Full CRUD with encryption support, pagination, filtering, and search
 - **File Attachments** - Encrypted file uploads and downloads
-- **Code Execution** - Secure Judge0 API proxy for running code in multiple languages
+- **Code Execution** - Self-hosted Piston engine for running code in multiple languages
 - **Health Checks** - System health checks and status monitoring
 
 ### Public Endpoints
 
-| Endpoint                | Description                              |
-| ----------------------- | ---------------------------------------- |
-| `GET /`                 | API information and version              |
-| `GET /health`           | Enhanced health check with system status |
-| `GET /websocket/status` | WebSocket server statistics              |
+| Endpoint      | Description                              |
+| ------------- | ---------------------------------------- |
+| `GET /`       | API information and version              |
+| `GET /health` | Enhanced health check with system status |
 
 ### Authentication
 
@@ -236,19 +231,6 @@ Visit the Swagger UI at [/docs](https://api.typelets.com/docs) for:
 - Example requests and responses
 - Schema definitions and validation rules
 
-### WebSocket Real-time Sync
-
-Connect to `ws://localhost:3000` (or your deployment URL) for real-time synchronization.
-
-**Features:**
-
-- JWT authentication required
-- Real-time note and folder updates
-- Rate limiting (300 msg/min per connection)
-- Connection limits (20 connections per user)
-
-**Message types:** `auth`, `ping`/`pong`, `join_note`/`leave_note`, `note_update`, `note_created`/`note_deleted`, `folder_created`/`folder_updated`/`folder_deleted`
-
 ## Database Schema
 
 The application uses the following main tables:
@@ -266,8 +248,6 @@ The application uses the following main tables:
 - **SQL Injection Protection**: Parameterized queries via Drizzle ORM
 - **CORS Configuration**: Configurable allowed origins
 - **File Size Limits**: Configurable limits (default: 50MB per file, 1GB total per note)
-- **WebSocket Security**: JWT authentication, rate limiting, and connection limits
-- **Real-time Authorization**: Database-level ownership validation for all WebSocket operations
 
 ## Environment Variables
 
@@ -290,10 +270,6 @@ The application uses the following main tables:
 | `HTTP_RATE_LIMIT_WINDOW_MS`    | HTTP rate limit window in milliseconds           | No       | 900000 (15 min)                  |
 | `HTTP_RATE_LIMIT_MAX_REQUESTS` | Max HTTP requests per window                     | No       | 1000                             |
 | `HTTP_FILE_RATE_LIMIT_MAX`     | Max file operations per window                   | No       | 100                              |
-| `WS_RATE_LIMIT_WINDOW_MS`      | WebSocket rate limit window in milliseconds      | No       | 60000 (1 min)                    |
-| `WS_RATE_LIMIT_MAX_MESSAGES`   | Max WebSocket messages per window                | No       | 300                              |
-| `WS_MAX_CONNECTIONS_PER_USER`  | Max WebSocket connections per user               | No       | 20                               |
-| `WS_AUTH_TIMEOUT_MS`           | WebSocket authentication timeout in milliseconds | No       | 30000 (30 sec)                   |
 | `CODE_EXEC_RATE_LIMIT_MAX`     | Max code executions per window                   | No       | 100 (dev), 50 (prod)             |
 | `CODE_EXEC_RATE_WINDOW_MS`     | Code execution rate limit window in milliseconds | No       | 900000 (15 min)                  |
 | **File & Storage**             |                                                  |          |                                  |
@@ -302,11 +278,9 @@ The application uses the following main tables:
 | `FREE_TIER_STORAGE_GB`         | Free tier storage limit in GB                    | No       | 1                                |
 | `FREE_TIER_NOTE_LIMIT`         | Free tier note count limit                       | No       | 100                              |
 | **Code Execution (Optional)**  |                                                  |          |                                  |
-| `JUDGE0_API_KEY`               | Judge0 API key for code execution                | No\*     | -                                |
-| `JUDGE0_API_URL`               | Judge0 API base URL                              | No       | https://judge0-ce.p.rapidapi.com |
-| `JUDGE0_API_HOST`              | Judge0 API host header                           | No       | judge0-ce.p.rapidapi.com         |
+| `PISTON_API_URL`               | Self-hosted Piston API URL                       | No\*     | http://localhost:2000            |
 
-\*Required only for code execution features
+\*Required only for code execution features (self-hosted Piston)
 
 ## Monitoring with Grafana Cloud
 
@@ -330,48 +304,51 @@ The API integrates with [Grafana Cloud](https://grafana.com/products/cloud/) usi
 
 ### Configuration
 
-**Setup**: Add your Grafana Cloud credentials to `.env`:
-
-```env
-# OpenTelemetry Configuration for Grafana Cloud
-OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-us-central-0.grafana.net/otlp
-GRAFANA_CLOUD_API_KEY=base64encodedstring
-OTEL_SERVICE_NAME=typelets-api
-```
-
-**Step-by-step setup:**
+**Local Development Setup:**
 
 1. **Sign up for Grafana Cloud** (free tier available):
    - Visit https://grafana.com/products/cloud/
 
-2. **Get your OTLP endpoint:**
+2. **Get your credentials:**
    - Go to **Connections** → **Add new connection** → **OpenTelemetry**
-   - Copy the OTLP endpoint URL (e.g., `https://otlp-gateway-prod-us-central-0.grafana.net/otlp`)
+   - Copy the OTLP endpoint URL (e.g., `https://otlp-gateway-prod-<region>.grafana.net/otlp`)
+   - Generate a token for authentication
 
-3. **Generate API credentials:**
-   - Create an API key with **MetricsPublisher** role
-   - Note your Grafana instance ID and API token
-
-4. **Encode your credentials:**
+3. **Start Grafana Alloy locally:**
    ```bash
-   echo -n "instanceID:apiToken" | base64
+   # Set your Grafana Cloud token in .env.local
+   echo "GRAFANA_CLOUD_TOKEN=glc_your_token_here" >> .env.local
+
+   # Start Alloy with Docker Compose
+   docker compose -f docker-compose.alloy.yml up -d
    ```
 
-5. **Set environment variables:**
-   - Add the configuration shown above to your `.env` file
-
-6. **Start the application in production mode:**
-   ```bash
-   NODE_ENV=production pnpm start
+4. **Configure your application:**
+   Add to `.env.local`:
+   ```env
+   # Point to local Alloy instance
+   OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+   OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+   OTEL_SERVICE_NAME=typelets-api
+   OTEL_RESOURCE_ATTRIBUTES=deployment.environment=development,service.name=typelets-api
    ```
-   You should see: `✅ OpenTelemetry initialized with Grafana Cloud`
+
+5. **Start development server:**
+   ```bash
+   pnpm run dev
+   ```
+
+You should see logs appearing in Grafana Cloud Loki with `service_name="typelets-api"`.
+
+**Production Setup:**
+
+In production (ECS), the Alloy sidecar runs in the same task as the API container. See the [Production Deployment](#production-deployment) section for details.
 
 **Important Notes:**
-- Observability is **ONLY enabled in production** (`NODE_ENV=production`) by default
-- This prevents development metrics from flooding your logs and consuming quota
-- In development, the app will show: `⚠️ OpenTelemetry not initialized - Running in development mode`
-- To force enable in development (not recommended): Set `OTEL_ENABLED=true`
-- If credentials are not set, the application runs normally with observability disabled
+- Local dev sends to Alloy at `localhost:4318`
+- Alloy forwards to Grafana Cloud with authentication
+- All telemetry (logs, traces, metrics) flows through Alloy
+- If Alloy is not running, the app continues working normally (telemetry is optional)
 
 ### What Gets Monitored
 
@@ -385,7 +362,6 @@ OTEL_SERVICE_NAME=typelets-api
 - Rate limiting violations
 - Security events (failed auth, suspicious activity)
 - Billing limit violations
-- WebSocket connection events
 - File upload events and storage operations
 - HTTP request/response logs
 - Database query performance
@@ -419,25 +395,13 @@ src/
 │   ├── security.ts     # Security headers middleware
 │   └── usage.ts        # Storage and usage limit enforcement
 ├── routes/
-│   ├── code.ts         # Code execution routes (Judge0 proxy)
+│   ├── code.ts         # Code execution routes (Piston engine)
 │   ├── files.ts        # File attachment routes
 │   ├── folders.ts      # Folder management routes with caching
 │   ├── notes.ts        # Note management routes
 │   └── users.ts        # User profile routes
 ├── types/
 │   └── index.ts        # TypeScript type definitions
-├── websocket/
-│   ├── auth/
-│   │   └── handler.ts  # JWT authentication and HMAC verification
-│   ├── handlers/
-│   │   ├── base.ts     # Base handler for resource operations
-│   │   ├── notes.ts    # Note sync operations
-│   │   └── folders.ts  # Folder sync operations
-│   ├── middleware/
-│   │   ├── connection-manager.ts  # Connection tracking and cleanup
-│   │   └── rate-limiter.ts        # WebSocket rate limiting
-│   ├── types.ts        # WebSocket message types
-│   └── index.ts        # Main WebSocket server manager
 └── server.ts           # Application entry point
 ```
 
@@ -481,23 +445,134 @@ docker run -p 3000:3000 \
 
 **⚠️ Important: Production deployment is completely different from local testing setup.**
 
-This application is designed for production deployment using AWS ECS (Elastic Container Service):
+This application is designed for production deployment using AWS ECS (Elastic Container Service) with a **Grafana Alloy sidecar** for observability.
 
-### Production Infrastructure:
+### Production Architecture
+
+```
+┌─────────────────────────────────────────┐
+│         ECS Task (Fargate)              │
+│                                         │
+│  ┌──────────────┐   ┌──────────────┐  │
+│  │ typelets-api │──▶│ grafana-alloy│  │
+│  │ (Port 3000)  │   │ (Port 4318)  │  │
+│  └──────────────┘   └──────┬───────┘  │
+│                             │          │
+└─────────────────────────────┼──────────┘
+                              │
+                              ▼
+                    Grafana Cloud OTLP
+```
+
+The API sends telemetry (logs, traces, metrics) to a local Alloy sidecar at `http://localhost:4318`, which then forwards to Grafana Cloud.
+
+### Production Infrastructure
 
 - **API**: ECS containers running in AWS
 - **Database**: AWS RDS PostgreSQL (not Docker containers)
+- **Monitoring**: Grafana Alloy sidecar + Grafana Cloud
 - **Environment Variables**: ECS task definitions (not `.env` files)
 - **Secrets**: AWS Parameter Store or Secrets Manager
 - **Container Registry**: Amazon ECR
 
-### Production vs Local Testing:
+### Deployment Steps
 
+#### 1. Build and Push Docker Images
+
+```bash
+# Build and push the API image
+pnpm run build
+docker build -t typelets-api:latest .
+docker tag typelets-api:latest YOUR_ECR_REPO/typelets-api:latest
+docker push YOUR_ECR_REPO/typelets-api:latest
+
+# Build and push the Alloy sidecar image
+docker build -f Dockerfile.alloy -t grafana-alloy:latest .
+docker tag grafana-alloy:latest YOUR_ECR_REPO/grafana-alloy:latest
+docker push YOUR_ECR_REPO/grafana-alloy:latest
+```
+
+#### 2. Create ECS Task Definition
+
+Your ECS task definition should include **two containers**:
+
+**Container 1: typelets-api**
+- Image: `YOUR_ECR_REPO/typelets-api:latest`
+- Port: 3000
+- Essential: `true`
+- Environment variables:
+  - `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`
+  - `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`
+  - `OTEL_SERVICE_NAME=typelets-api`
+  - All other app environment variables
+
+**Container 2: grafana-alloy**
+- Image: `YOUR_ECR_REPO/grafana-alloy:latest`
+- Ports: 4318, 4317
+- Essential: `false`
+- Environment variables:
+  - `GRAFANA_CLOUD_TOKEN=your_grafana_cloud_token`
+  - `GRAFANA_CLOUD_ENDPOINT=your_otlp_gateway_endpoint_here`
+  - `GRAFANA_CLOUD_INSTANCE_ID=your_instance_id`
+
+**Task Resources:**
+- CPU: 1024 (1 vCPU)
+- Memory: 2048 (2GB)
+- Network Mode: `awsvpc` (required for localhost communication)
+
+#### 3. Register and Deploy
+
+```bash
+# Register the task definition
+aws ecs register-task-definition \
+  --cli-input-json file://ecs-task-definition.json \
+  --region us-east-1
+
+# Update the service
+aws ecs update-service \
+  --cluster YOUR_CLUSTER_NAME \
+  --service YOUR_SERVICE_NAME \
+  --task-definition typelets-api-td \
+  --force-new-deployment \
+  --region us-east-1
+```
+
+### Important Notes
+
+**Local Development with Grafana:**
+- Run Alloy locally: `docker compose -f docker-compose.alloy.yml up -d`
+- Set `GRAFANA_CLOUD_TOKEN` in `.env.local`
+- Logs will appear in Grafana Cloud Loki
+
+**Production Secrets:**
+- Never commit ECS task definitions (they contain secrets)
+- Task definition files are in `.gitignore`
+- Store sensitive values in AWS Secrets Manager or Parameter Store
+
+**Monitoring:**
+- CloudWatch Logs: `/ecs/typelets-backend-td` (app logs)
+- CloudWatch Logs: `/ecs/grafana-alloy` (Alloy logs)
+- Grafana Cloud Loki: Structured app logs with trace correlation
+
+**Health Checks:**
+- App container: Uses `/health` endpoint
+- Alloy container: No health check needed (essential: false)
+
+### Troubleshooting
+
+**Container fails with "Cannot find module './instrumentation.js'":**
+- This is fixed in the Dockerfile by copying `instrumentation.js` to production
+- Rebuild and push the image
+
+**Logs not appearing in Grafana:**
+- Check Alloy container logs in CloudWatch
+- Verify `GRAFANA_CLOUD_TOKEN` is set correctly
+- Ensure app is sending to `http://localhost:4318`
+
+**Production vs Local:**
 - **Local**: Uses `.env` files and Docker containers for testing
 - **Production**: Uses ECS task definitions and AWS RDS for real deployment
 - **Never use**: Local testing setup in production
-
-For production deployment, configure the same environment variables in your ECS task definition that you use locally in `.env`.
 
 ## Contributing
 

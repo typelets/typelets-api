@@ -2,6 +2,7 @@ import { verifyToken } from "@clerk/backend";
 import { createHash, createHmac } from "crypto";
 import { AuthenticatedWebSocket, WebSocketMessage, WebSocketConfig } from "../types";
 import { ConnectionManager } from "../middleware/connection-manager";
+import { logger } from "../../lib/logger";
 
 interface AuthenticatedMessage {
   payload: WebSocketMessage;
@@ -48,9 +49,11 @@ export class AuthHandler {
   setupAuthTimeout(ws: AuthenticatedWebSocket): void {
     ws.authTimeout = setTimeout(() => {
       if (!ws.isAuthenticated) {
-        if (process.env.NODE_ENV === "development") {
-          console.log("WebSocket connection closed due to authentication timeout");
-        }
+        logger.warn("[AUTH] WebSocket authentication timeout", {
+          type: "auth_event",
+          event_type: "websocket_auth_timeout",
+        });
+
         ws.send(
           JSON.stringify({
             type: "error",
@@ -77,6 +80,13 @@ export class AuthHandler {
 
       // Check connection limit before allowing authentication
       if (!this.connectionManager.checkConnectionLimit(userId)) {
+        logger.warn("[AUTH] WebSocket connection limit exceeded", {
+          type: "auth_event",
+          event_type: "websocket_connection_limit",
+          "user.id": userId,
+          userId,
+        });
+
         ws.send(
           JSON.stringify({
             type: "error",
@@ -110,6 +120,14 @@ export class AuthHandler {
 
       this.connectionManager.addUserConnection(userId, ws);
 
+      // Log successful WebSocket authentication
+      logger.info("[AUTH] WebSocket authentication successful", {
+        type: "auth_event",
+        event_type: "websocket_auth_success",
+        "user.id": userId,
+        userId,
+      });
+
       ws.send(
         JSON.stringify({
           type: "auth_success",
@@ -118,14 +136,18 @@ export class AuthHandler {
           sessionSecret: sessionSecret,
         })
       );
-
-      if (process.env.NODE_ENV === "development") {
-        console.log(`User ${ws.userId} authenticated via WebSocket`);
-      }
     } catch (error: unknown) {
       const isTokenExpired =
         (error as Record<string, unknown>)?.reason === "token-expired" ||
         (error instanceof Error && error.message.includes("JWT is expired"));
+
+      // Log WebSocket authentication failure
+      logger.warn("[AUTH] WebSocket authentication failed", {
+        type: "auth_event",
+        event_type: "websocket_auth_failure",
+        reason: isTokenExpired ? "token-expired" : "invalid-token",
+        error: error instanceof Error ? error.message : String(error),
+      });
 
       ws.send(
         JSON.stringify({

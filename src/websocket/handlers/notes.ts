@@ -3,6 +3,7 @@ import { eq, and } from "drizzle-orm";
 import { AuthenticatedWebSocket, WebSocketMessage } from "../types";
 import { ConnectionManager } from "../middleware/connection-manager";
 import { BaseResourceHandler } from "./base";
+import { logger } from "../../lib/logger";
 
 export class NoteHandler extends BaseResourceHandler {
   constructor(connectionManager: ConnectionManager) {
@@ -132,21 +133,21 @@ export class NoteHandler extends BaseResourceHandler {
               typeof value === "string" &&
               value !== "[ENCRYPTED]"
             ) {
-              // logger.warn("Note update: rejected plaintext field - must be [ENCRYPTED]", {
-              //   type: "security",
-              //   field: key,
-              //   noteId: message.noteId || "unknown",
-              // });
+              logger.securityEvent("plaintext_field_rejected", "medium", {
+                field: key,
+                noteId: message.noteId || "unknown",
+                userId: ws.userId || "unknown",
+              });
               return;
             }
 
             filteredChanges[key] = value;
           } else {
-            // logger.warn("Note update: filtered out disallowed field", {
-            //   type: "security",
-            //   field: key,
-            //   noteId: message.noteId || "unknown",
-            // });
+            logger.securityEvent("disallowed_field_filtered", "low", {
+              field: key,
+              noteId: message.noteId || "unknown",
+              userId: ws.userId || "unknown",
+            });
           }
         });
 

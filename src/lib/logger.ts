@@ -9,6 +9,53 @@ interface LogLevel {
 
 type LogMetadata = Record<string, string | number | boolean>;
 
+// Headers that should be redacted for security
+const SENSITIVE_HEADER_PATTERNS = [
+  "authorization",
+  "cookie",
+  "set-cookie",
+  "x-client-secret",
+  "x-api-key",
+  "api-key",
+  "authentication",
+  "proxy-authorization",
+  "x-auth-token",
+];
+
+/**
+ * Sanitize headers by redacting sensitive values (tokens, secrets, cookies)
+ */
+export function sanitizeHeaders(headers: Headers | Record<string, string>): Record<string, string> {
+  const sanitized: Record<string, string> = {};
+
+  // Convert headers to entries array based on type
+  let entries: [string, string][];
+  if (headers instanceof Headers) {
+    entries = [];
+    headers.forEach((value, key) => {
+      entries.push([key, value]);
+    });
+  } else {
+    entries = Object.entries(headers);
+  }
+
+  for (const [key, value] of entries) {
+    const lowerKey = key.toLowerCase();
+
+    // Check if this header should be redacted
+    const isSensitive = SENSITIVE_HEADER_PATTERNS.some((pattern) => lowerKey.includes(pattern));
+
+    if (isSensitive) {
+      // Show that the header was present but redact the value
+      sanitized[key] = "[REDACTED]";
+    } else {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+}
+
 const LOG_LEVELS: Record<string, LogLevel> = {
   error: { level: "error", priority: 0, severity: SeverityNumber.ERROR },
   warn: { level: "warn", priority: 1, severity: SeverityNumber.WARN },
@@ -48,7 +95,9 @@ class Logger {
       const loggerProvider = logs.getLoggerProvider();
       this.otelLogger = loggerProvider.getLogger(this.serviceName, this.serviceVersion);
       this.otelLoggerInitialized = true;
-      console.log("✅ OpenTelemetry logger initialized for application logs");
+      if (this.environment === "development") {
+        console.log("✅ OpenTelemetry logger initialized for application logs");
+      }
     } catch {
       // OpenTelemetry not initialized, fall back to console logging
       this.otelLogger = null;
@@ -213,10 +262,13 @@ class Logger {
     path: string,
     statusCode: number,
     duration: number,
-    userId?: string
+    userId?: string,
+    headers?: Record<string, string>
   ): void {
     const normalizedPath = this.normalizePath(path);
-    this.info(`[API] ${method} ${normalizedPath}`, {
+
+    // Build metadata object
+    const meta: LogMetadata = {
       // Event type
       type: "http_request",
       event_type: "http_request",
@@ -238,7 +290,35 @@ class Logger {
       // User context
       "user.id": userId || "anonymous",
       userId: userId || "anonymous",
-    });
+    };
+
+    // Add sanitized headers if provided (useful for debugging in Grafana)
+    if (headers) {
+      // Add common useful headers as individual fields for easy filtering
+      if (headers["user-agent"]) meta["http.user_agent"] = headers["user-agent"];
+      if (headers["content-type"]) meta["http.content_type"] = headers["content-type"];
+      if (headers["host"]) meta["http.host"] = headers["host"];
+      if (headers["referer"]) meta["http.referer"] = headers["referer"];
+      if (headers["accept-language"]) meta["http.accept_language"] = headers["accept-language"];
+
+      // Extract client IP from various headers (in order of priority)
+      // x-forwarded-for: Standard proxy header (may contain comma-separated list)
+      // x-real-ip: Nginx proxy header
+      // cf-connecting-ip: Cloudflare header
+      const clientIp =
+        headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+        headers["x-real-ip"] ||
+        headers["cf-connecting-ip"];
+
+      if (clientIp) {
+        meta["http.client_ip"] = clientIp;
+      }
+
+      // Store full headers as JSON string for detailed debugging
+      meta["http.request_headers"] = JSON.stringify(headers);
+    }
+
+    this.info(`[API] ${method} ${normalizedPath}`, meta);
   }
 
   websocketEvent(
@@ -271,11 +351,11 @@ class Logger {
     }
     if (status) meta.status = status;
 
-    this.info(`WebSocket ${eventType}`, meta);
+    this.info(`[WS] ${eventType}`, meta);
   }
 
   databaseQuery(operation: string, table: string, duration: number, userId?: string): void {
-    this.debug(`[DB] ${operation} ${table}`, {
+    const meta = {
       type: "database_query",
       event_type: "database_query",
 
@@ -294,12 +374,20 @@ class Logger {
       // User context
       "user.id": userId || "anonymous",
       userId: userId || "anonymous",
-    });
+    };
+
+    // Log slow queries at info level (visible in production)
+    if (duration > 1000) {
+      this.warn(`[DB] Slow query: ${operation} ${table} took ${duration}ms`, meta);
+    } else {
+      // Fast queries only logged in debug (dev-only)
+      this.debug(`[DB] ${operation} ${table}`, meta);
+    }
   }
 
   codeExecution(languageId: number, duration: number, success: boolean, userId?: string): void {
     const status = success ? "success" : "failed";
-    this.info(`Code execution ${status}`, {
+    this.info(`[CODE] Execution ${status} (language: ${languageId})`, {
       type: "code_execution",
       event_type: "code_execution",
       language_id: languageId,
@@ -314,7 +402,7 @@ class Logger {
   }
 
   businessEvent(eventName: string, userId: string, metadata: LogMetadata = {}): void {
-    this.info(`Business event ${eventName}`, {
+    this.info(`[NOTE] ${eventName}`, {
       type: "business_event",
       event_type: "business_event",
       event_name: eventName,
@@ -330,7 +418,7 @@ class Logger {
     severity: "low" | "medium" | "high" | "critical",
     details: LogMetadata
   ): void {
-    this.warn(`Security event ${eventType}`, {
+    this.warn(`[SECURITY] ${eventType} (${severity})`, {
       type: "security_event",
       event_type: "security_event",
       security_event_type: eventType,
@@ -377,12 +465,12 @@ class Logger {
     }
 
     // Log at debug level
-    this.debug(`Cache ${operation}${hit !== undefined ? (hit ? " HIT" : " MISS") : ""}`, meta);
+    this.debug(`[CACHE] ${operation}${hit !== undefined ? (hit ? " HIT" : " MISS") : ""}`, meta);
   }
 
   cacheError(operation: string, key: string, error: Error): void {
     this.error(
-      `Cache ${operation} error for key ${key}`,
+      `[CACHE] ${operation} error - ${key}`,
       {
         type: "cache_error",
         event_type: "cache_error",
@@ -406,7 +494,7 @@ class Logger {
   ): void {
     const status = success ? "success" : "failed";
 
-    this.info(`File upload ${status}`, {
+    this.info(`[FILE] Upload ${status} - ${filename}`, {
       type: "file_upload",
       event_type: "file_upload",
       "file.name": filename,
@@ -425,7 +513,7 @@ class Logger {
 
   // Storage tracking method
   storageUpdate(totalBytes: number, operation: "add" | "remove", deltaBytes?: number): void {
-    this.debug("Storage updated", {
+    this.debug(`[STORAGE] ${operation} - Total: ${totalBytes} bytes`, {
       type: "storage_update",
       event_type: "storage_update",
       "storage.total_bytes": totalBytes,

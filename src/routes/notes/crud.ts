@@ -45,10 +45,8 @@ const listNotesRoute = createRoute({
 
 // Handler function for listing notes
 const listNotesHandler: RouteHandler<typeof listNotesRoute> = async (c) => {
-  const startTime = Date.now();
   const userId = c.get("userId");
   const query = c.req.valid("query");
-  console.log(`[PERF] Start listNotes - userId: ${userId}`);
 
   const conditions: SQL[] = [eq(notes.userId, userId)];
 
@@ -92,17 +90,13 @@ const listNotesHandler: RouteHandler<typeof listNotesRoute> = async (c) => {
   }
 
   const whereClause = conditions.length > 1 ? and(...conditions) : conditions[0];
-  console.log(`[PERF] Building where clause took: ${Date.now() - startTime}ms`);
 
-  const countStart = Date.now();
   const [{ total }] = await db.select({ total: count() }).from(notes).where(whereClause);
-  console.log(`[PERF] COUNT query took: ${Date.now() - countStart}ms, total: ${total}`);
 
   const page = query.page || 1;
   const limit = query.limit || 20;
   const offset = (page - 1) * limit;
 
-  const queryStart = Date.now();
   const userNotes = await db.query.notes.findMany({
     where: whereClause,
     orderBy: [desc(notes.updatedAt)],
@@ -128,20 +122,12 @@ const listNotesHandler: RouteHandler<typeof listNotesRoute> = async (c) => {
       },
     },
   });
-  console.log(
-    `[PERF] Main query took: ${Date.now() - queryStart}ms, returned ${userNotes.length} notes`
-  );
 
   // Add attachment counts to notes
-  const mapStart = Date.now();
   const notesWithAttachmentCount = userNotes.map((note) => ({
     ...note,
     attachmentCount: note.attachments.length,
   }));
-  console.log(`[PERF] Mapping took: ${Date.now() - mapStart}ms`);
-
-  const totalTime = Date.now() - startTime;
-  console.log(`[PERF] Total endpoint time: ${totalTime}ms`);
 
   return c.json(
     {

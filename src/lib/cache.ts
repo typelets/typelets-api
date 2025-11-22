@@ -7,7 +7,7 @@ let client: Redis | null = null;
 
 export function getCacheClient(): Redis | null {
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-    logger.warn("Upstash Redis not configured, caching disabled");
+    logger.warn("[CACHE] Upstash Redis not configured, caching disabled");
     return null;
   }
 
@@ -18,10 +18,10 @@ export function getCacheClient(): Redis | null {
         token: process.env.UPSTASH_REDIS_REST_TOKEN,
       });
 
-      logger.info("Connected to Upstash Redis");
+      logger.info("[CACHE] Connected to Upstash Redis");
     } catch (error) {
       logger.error(
-        "Failed to initialize Upstash Redis client",
+        "[CACHE] Failed to initialize Upstash Redis client",
         {
           error: error instanceof Error ? error.message : String(error),
         },
@@ -38,7 +38,7 @@ export async function closeCache(): Promise<void> {
   if (client) {
     // Upstash REST client doesn't need explicit disconnection
     client = null;
-    logger.info("Upstash Redis connection closed");
+    logger.info("[CACHE] Upstash Redis connection closed");
   }
 }
 
@@ -49,14 +49,28 @@ export async function getCache<T>(key: string): Promise<T | null> {
 
   const startTime = Date.now();
   try {
-    const data = await cache.get<string>(key);
+    const data = await cache.get(key);
     const duration = Date.now() - startTime;
     const hit = data !== null;
 
     // Log cache operation with metrics
     logger.cacheOperation("get", key, hit, duration);
 
-    return data ? (JSON.parse(data) as T) : null;
+    if (!data) return null;
+
+    // Upstash can return either a string or already-parsed object
+    // If it's already an object, return it directly
+    if (typeof data === "object") {
+      return data as T;
+    }
+
+    // If it's a string, parse it
+    if (typeof data === "string") {
+      return JSON.parse(data) as T;
+    }
+
+    // For other primitive types, return as-is
+    return data as T;
   } catch (error) {
     logger.cacheError("get", key, error instanceof Error ? error : new Error(String(error)));
     return null;
@@ -139,7 +153,7 @@ export async function deleteCachePattern(pattern: string): Promise<void> {
         await Promise.all(batch.map((key) => cache.del(key)));
       }
 
-      logger.info(`Deleted cache keys matching pattern`, {
+      logger.info(`[CACHE] Deleted ${keys.length} keys matching pattern: ${pattern}`, {
         pattern,
         keyCount: keys.length,
       });
@@ -213,7 +227,7 @@ export async function invalidateNoteCounts(userId: string, folderId: string | nu
     // Delete all cache keys
     if (cacheKeys.length > 0) {
       await deleteCache(...cacheKeys);
-      logger.debug("Invalidated note counts cache", {
+      logger.debug("[CACHE] Invalidated note counts cache", {
         userId,
         folderId: folderId || "root",
         keysInvalidated: cacheKeys.length,
@@ -221,7 +235,7 @@ export async function invalidateNoteCounts(userId: string, folderId: string | nu
     }
   } catch (error) {
     logger.error(
-      "Failed to invalidate note counts cache",
+      "[CACHE] Failed to invalidate note counts cache",
       {
         userId,
         folderId: folderId || "root",

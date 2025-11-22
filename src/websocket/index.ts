@@ -11,6 +11,7 @@ import { ConnectionManager } from "./middleware/connection-manager";
 import { AuthHandler } from "./auth/handler";
 import { NoteHandler } from "./handlers/notes";
 import { FolderHandler } from "./handlers/folders";
+import { logger } from "../lib/logger";
 
 export class WebSocketManager {
   private wss: WebSocketServer;
@@ -36,7 +37,34 @@ export class WebSocketManager {
     this.noteHandler = new NoteHandler(this.connectionManager);
     this.folderHandler = new FolderHandler(this.connectionManager);
 
-    this.wss = new WebSocketServer({ server });
+    // Parse allowed origins from CORS configuration
+    const allowedOrigins = process.env.CORS_ORIGINS?.split(",").map((o) => o.trim()) || [];
+
+    this.wss = new WebSocketServer({
+      server,
+      verifyClient: (info, callback) => {
+        const origin = info.req.headers.origin;
+
+        // Allow connections without origin header (non-browser clients like Postman, CLI tools)
+        // These still require JWT authentication after connection
+        if (!origin) {
+          callback(true);
+          return;
+        }
+
+        // Validate origin against allowed list (CSWSH protection)
+        if (allowedOrigins.length > 0 && !allowedOrigins.includes(origin)) {
+          logger.securityEvent("websocket_invalid_origin", "high", {
+            origin,
+            allowedOrigins: allowedOrigins.join(","),
+          });
+          callback(false, 403, "Forbidden: Invalid origin");
+          return;
+        }
+
+        callback(true);
+      },
+    });
     this.setupWebSocketServer();
     WebSocketManager.instance = this;
   }
@@ -62,11 +90,10 @@ export class WebSocketManager {
                 message: "Message too large. Maximum size is 1MB.",
               })
             );
-            // logger.warn("WebSocket message too large", {
-            //   type: "websocket_security",
-            //   messageSize: data.length,
-            //   userId: ws.userId || "unauthenticated",
-            // });
+            logger.securityEvent("websocket_message_too_large", "medium", {
+              messageSize: data.length,
+              userId: ws.userId || "unauthenticated",
+            });
             return;
           }
 
@@ -78,6 +105,9 @@ export class WebSocketManager {
                 message: "Rate limit exceeded. Please slow down.",
               })
             );
+            logger.securityEvent("websocket_rate_limit_exceeded", "low", {
+              userId: ws.userId || "unauthenticated",
+            });
             return;
           }
 
@@ -93,6 +123,10 @@ export class WebSocketManager {
                 message: "Message authentication failed",
               })
             );
+            logger.securityEvent("websocket_auth_failed", "high", {
+              userId: ws.userId || "unauthenticated",
+              messageType: rawMessage?.type || "unknown",
+            });
             return;
           }
 

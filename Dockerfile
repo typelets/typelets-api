@@ -38,7 +38,9 @@ RUN pnpm install --frozen-lockfile --prod
 
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
-# Application configuration complete
+
+# Copy instrumentation.js (needed for OTEL auto-instrumentation)
+COPY --from=builder /app/instrumentation.js ./instrumentation.js
 
 # Change ownership to non-root user
 RUN chown -R typelets:nodejs /app

@@ -738,9 +738,9 @@ export const codeHealthResponseSchema = z
     status: z
       .enum(["healthy", "degraded", "unhealthy"])
       .openapi({ example: "healthy", description: "Service health status" }),
-    judge0: z
+    piston: z
       .enum(["connected", "partial_connectivity", "disconnected"])
-      .openapi({ example: "connected", description: "Judge0 connection status" }),
+      .openapi({ example: "connected", description: "Piston engine connection status" }),
     timestamp: z
       .string()
       .datetime()

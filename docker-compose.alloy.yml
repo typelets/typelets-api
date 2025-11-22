@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  alloy:
+    image: grafana/alloy:latest
+    container_name: grafana-alloy
+    ports:
+      - "4317:4317"  # OTLP gRPC
+      - "4318:4318"  # OTLP HTTP
+      - "12345:12345" # Alloy UI
+    volumes:
+      - ./alloy-config.alloy:/etc/alloy/config.alloy
+    environment:
+      - GRAFANA_CLOUD_ENDPOINT=${GRAFANA_CLOUD_ENDPOINT}
+      - GRAFANA_CLOUD_INSTANCE_ID=${GRAFANA_CLOUD_INSTANCE_ID}
+      - GRAFANA_CLOUD_TOKEN=${GRAFANA_CLOUD_TOKEN}
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+    restart: unless-stopped

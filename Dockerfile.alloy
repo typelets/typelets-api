@@ -1,0 +1,8 @@
+# Grafana Alloy with embedded configuration for ECS
+FROM grafana/alloy:latest
+
+# Copy the Alloy configuration into the image
+COPY alloy-config.alloy /etc/alloy/config.alloy
+
+# Default command (can be overridden in ECS task definition)
+CMD ["run", "/etc/alloy/config.alloy", "--server.http.listen-addr=0.0.0.0:12345"]

@@ -463,14 +463,14 @@ crudRouter.openapi(getHealthRoute, async (c) => {
     if (response.ok) {
       return c.json({
         status: "healthy",
-        judge0: "connected",
+        piston: "connected",
         timestamp: new Date().toISOString(),
       });
     } else {
       return c.json(
         {
           status: "degraded",
-          judge0: "partial_connectivity",
+          piston: "partial_connectivity",
           timestamp: new Date().toISOString(),
         },
         207
@@ -487,7 +487,7 @@ crudRouter.openapi(getHealthRoute, async (c) => {
     return c.json(
       {
         status: "unhealthy",
-        judge0: "disconnected",
+        piston: "disconnected",
         timestamp: new Date().toISOString(),
       },
       503

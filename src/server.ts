@@ -24,7 +24,7 @@ import usersRouter from "./routes/users/crud";
 import filesRouter from "./routes/files/crud";
 import codeRouter from "./routes/code/crud";
 import { VERSION } from "./version";
-import { logger } from "./lib/logger";
+import { logger, sanitizeHeaders } from "./lib/logger";
 
 // Type for OpenAPI routers - using permissive any to avoid type conflicts with library internals
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,8 +47,14 @@ app.use("*", async (c, next) => {
   const method = c.req.method;
   const path = new URL(c.req.url).pathname;
 
-  if (isDevelopment) {
-    console.log(`🌐 [${method}] ${path} - Request started`);
+  // Capture and sanitize headers before processing (tokens will be redacted)
+  const headers = sanitizeHeaders(c.req.raw.headers);
+
+  // Add connection IP as fallback when no proxy headers are present (local dev)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const socket = (c.req.raw as any).socket;
+  if (socket?.remoteAddress && !headers["x-forwarded-for"] && !headers["x-real-ip"]) {
+    headers["x-real-ip"] = socket.remoteAddress;
   }
 
   await next();
@@ -64,16 +70,10 @@ app.use("*", async (c, next) => {
   // Skip logging for 404s (scanner noise)
   const is404 = status === 404;
 
-  // Log HTTP request with structured logging
+  // Log HTTP request with structured logging (sent to Grafana in both dev and prod)
   if (!skipLogging && !is404) {
     const userId = c.get("userId");
-    logger.httpRequest(method, path, status, duration, userId);
-  }
-
-  if (isDevelopment) {
-    const emoji =
-      status >= 200 && status < 300 ? "✅" : status >= 400 && status < 500 ? "⚠️" : "❌";
-    console.log(`${emoji} [${method}] ${path} - ${status} (${duration}ms)`);
+    logger.httpRequest(method, path, status, duration, userId, headers);
   }
 });
 
