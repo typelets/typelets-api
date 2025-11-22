@@ -1,3 +1,10 @@
+## [1.15.9](https://github.com/typelets/typelets-api/compare/v1.15.8...v1.15.9) (2025-11-22)
+
+
+### Bug Fixes
+
+* include http.client_ip in all auth event logs ([a313aa9](https://github.com/typelets/typelets-api/commit/a313aa9b96b12473df986f182ab4f88cac12c7ad))
+
 ## [1.15.8](https://github.com/typelets/typelets-api/compare/v1.15.7...v1.15.8) (2025-11-22)
 
 
