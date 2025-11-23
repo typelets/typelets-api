@@ -1,3 +1,10 @@
+## [1.16.1](https://github.com/typelets/typelets-api/compare/v1.16.0...v1.16.1) (2025-11-23)
+
+
+### Bug Fixes
+
+* add style attribute support and logging for public notes ([bc831ef](https://github.com/typelets/typelets-api/commit/bc831efb070db550e8d4afe3ade0e6f4f7e33cb3))
+
 # [1.16.0](https://github.com/typelets/typelets-api/compare/v1.15.10...v1.16.0) (2025-11-22)
 
 

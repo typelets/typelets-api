@@ -1,2 +1,2 @@
 // This file is automatically updated by semantic-release
-export const VERSION = "1.16.0"
+export const VERSION = "1.16.1"
