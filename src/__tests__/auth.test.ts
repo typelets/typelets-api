@@ -7,11 +7,13 @@ import { describe, it, expect, beforeEach, jest } from "@jest/globals";
 import { db } from "../db";
 import { users } from "../db/schema";
 import { eq } from "drizzle-orm";
-import { cleanupDatabase, countRows } from "./helpers/testDb";
+import { cleanupDatabase } from "./helpers/testDb";
 
 // Mock Clerk SDK
-const mockGetUser = jest.fn();
-const mockVerifyToken = jest.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockGetUser = jest.fn<any, any>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockVerifyToken = jest.fn<any, any>();
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
