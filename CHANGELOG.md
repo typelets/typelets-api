@@ -1,3 +1,10 @@
+## [1.16.2](https://github.com/typelets/typelets-api/compare/v1.16.1...v1.16.2) (2025-11-23)
+
+
+### Bug Fixes
+
+* update clerkClient usage for Clerk SDK v2.13.0 ([38aa913](https://github.com/typelets/typelets-api/commit/38aa91307cde69ac3c6fee9d1aa1c41f6fe570f6))
+
 ## [1.16.1](https://github.com/typelets/typelets-api/compare/v1.16.0...v1.16.1) (2025-11-23)
 
 
