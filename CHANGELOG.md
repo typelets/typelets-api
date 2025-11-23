@@ -1,3 +1,10 @@
+## [1.16.4](https://github.com/typelets/typelets-api/compare/v1.16.3...v1.16.4) (2025-11-23)
+
+
+### Bug Fixes
+
+* add type annotations to auth test mocks for Jest 30 compatibility ([6c38045](https://github.com/typelets/typelets-api/commit/6c38045a8896d7755d5f6172798fa83838012324))
+
 ## [1.16.3](https://github.com/typelets/typelets-api/compare/v1.16.2...v1.16.3) (2025-11-23)
 
 
