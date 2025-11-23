@@ -19,6 +19,13 @@ export default async function globalSetup() {
   const db = drizzle(client);
 
   try {
+    // Drop and recreate schemas to ensure clean state (TEST DATABASE ONLY)
+    // This prevents stale migration records from causing table mismatch issues
+    console.log("🧹 Resetting test database schema...");
+    await client`DROP SCHEMA IF EXISTS drizzle CASCADE`;
+    await client`DROP SCHEMA public CASCADE`;
+    await client`CREATE SCHEMA public`;
+
     // Run all Drizzle migrations from the drizzle folder
     // Use path.resolve to get absolute path from project root
     const migrationsFolder = path.resolve(process.cwd(), "drizzle");

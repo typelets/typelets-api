@@ -1,4 +1,8 @@
-import "dotenv/config";
+// Only load dotenv if DATABASE_URL is not already set (e.g., in tests)
+if (!process.env.DATABASE_URL) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("dotenv/config");
+}
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as postgres from "postgres";
 import * as schema from "./schema";

@@ -182,13 +182,16 @@ class Logger {
 
     // Standardized error formatting
     if (error) {
-      logData.error = {
+      const errorData: Record<string, unknown> = {
         message: error.message,
         name: error.name,
         stack: error.stack,
-        // Include error cause if present (Error chaining)
-        ...(error.cause && { cause: String(error.cause) }),
       };
+      // Include error cause if present (Error chaining)
+      if (error.cause) {
+        errorData.cause = String(error.cause);
+      }
+      logData.error = errorData;
       logData.error_message = error.message; // Top-level for easy filtering
       logData.error_type = error.name;
     }
