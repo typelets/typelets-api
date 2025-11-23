@@ -11,9 +11,9 @@ import { cleanupDatabase } from "./helpers/testDb";
 
 // Mock Clerk SDK
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockGetUser = jest.fn<any, any>();
+const mockGetUser = jest.fn() as jest.Mock<any>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockVerifyToken = jest.fn<any, any>();
+const mockVerifyToken = jest.fn() as jest.Mock<any>;
 
 jest.mock("@clerk/backend", () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
