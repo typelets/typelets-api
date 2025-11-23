@@ -52,6 +52,7 @@ function sanitizeHtml(html: string): string {
       "href", "src", "alt", "title", "class", "id",
       "target", "rel", "width", "height",
       "colspan", "rowspan",
+      "style", // For text color/background color support
     ],
     // Only allow safe URL protocols (blocks javascript:, data:, vbscript:, etc.)
     ALLOWED_URI_REGEXP: /^(?:https?|mailto|tel):/i,
@@ -254,8 +255,19 @@ crudRouter.openapi(getPublicNoteRoute, async (c) => {
   logger.databaseQuery("select", "public_notes", Date.now() - selectStart);
 
   if (!publicNote) {
+    logger.info("[PUBLIC API] Public note not found", {
+      type: "public_api_event",
+      event_type: "public_note_not_found",
+      slug,
+    });
     throw new HTTPException(404, { message: "Public note not found" });
   }
+
+  logger.info("[PUBLIC API] Public note viewed", {
+    type: "public_api_event",
+    event_type: "public_note_viewed",
+    slug,
+  });
 
   return c.json(publicNote, 200);
 });
@@ -342,6 +354,14 @@ crudRouter.openapi(updatePublicNoteRoute, async (c) => {
     .where(eq(publicNotes.id, existingPublicNote.id))
     .returning();
   logger.databaseQuery("update", "public_notes", Date.now() - updateStart, userId);
+
+  logger.info("[PUBLIC_NOTES] Public note updated", {
+    type: "public_note_event",
+    event_type: "public_note_updated",
+    "user.id": userId,
+    publicNoteId: existingPublicNote.id,
+    slug,
+  });
 
   return c.json(updatedPublicNote, 200);
 });
