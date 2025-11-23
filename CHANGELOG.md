@@ -1,3 +1,10 @@
+## [1.16.5](https://github.com/typelets/typelets-api/compare/v1.16.4...v1.16.5) (2025-11-23)
+
+
+### Bug Fixes
+
+* correct Jest 30 mock type casting syntax ([92a192a](https://github.com/typelets/typelets-api/commit/92a192ad312c77d00a9058a8b9c95564d82001e1))
+
 ## [1.16.4](https://github.com/typelets/typelets-api/compare/v1.16.3...v1.16.4) (2025-11-23)
 
 
