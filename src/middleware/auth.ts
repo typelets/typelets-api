@@ -140,7 +140,7 @@ export const authMiddleware = async (c: Context, next: Next) => {
       });
 
       // Fetch user details from Clerk API
-      const clerkUser = await clerkClient().users.getUser(userData.id);
+      const clerkUser = await clerkClient.users.getUser(userData.id);
 
       const email =
         clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
