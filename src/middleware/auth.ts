@@ -1,6 +1,6 @@
 import { Context, Next } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { verifyToken, clerkClient } from "@clerk/backend";
+import { verifyToken, createClerkClient } from "@clerk/backend";
 import { db, users, folders, type User } from "../db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
@@ -34,6 +34,11 @@ if (!process.env.CLERK_SECRET_KEY) {
     "Missing Clerk Secret Key - Please add CLERK_SECRET_KEY to your environment variables"
   );
 }
+
+// Create Clerk client instance
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
+});
 
 declare module "hono" {
   interface ContextVariableMap {
