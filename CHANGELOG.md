@@ -1,3 +1,10 @@
+## [1.16.7](https://github.com/typelets/typelets-api/compare/v1.16.6...v1.16.7) (2025-11-24)
+
+
+### Bug Fixes
+
+* update color regex to allow lowercase hex in OpenAPI schema ([87dd2bc](https://github.com/typelets/typelets-api/commit/87dd2bc312c46142aa7d803107d31cbc32a92706))
+
 ## [1.16.6](https://github.com/typelets/typelets-api/compare/v1.16.5...v1.16.6) (2025-11-23)
 
 
