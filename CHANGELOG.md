@@ -1,3 +1,10 @@
+## [1.16.6](https://github.com/typelets/typelets-api/compare/v1.16.5...v1.16.6) (2025-11-23)
+
+
+### Bug Fixes
+
+* add auth tests and fix test database setup ([c71be50](https://github.com/typelets/typelets-api/commit/c71be50d433a9a2351cdecffdbaa45062ff18798))
+
 ## [1.16.5](https://github.com/typelets/typelets-api/compare/v1.16.4...v1.16.5) (2025-11-23)
 
 
