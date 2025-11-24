@@ -19,7 +19,7 @@ function isCloudflareConfigured(): boolean {
   return !!(
     process.env.CLOUDFLARE_ZONE_ID &&
     process.env.CLOUDFLARE_API_TOKEN &&
-    process.env.PUBLIC_URL
+    process.env.API_URL
   );
 }
 
@@ -99,16 +99,16 @@ export async function purgeCloudflareCache(urls: string[]): Promise<boolean> {
  * @param slug - The public note slug
  */
 export async function purgePublicNoteCache(slug: string): Promise<boolean> {
-  const publicUrl = process.env.PUBLIC_URL;
-  if (!publicUrl) {
-    logger.debug("[CLOUDFLARE] PUBLIC_URL not configured, skipping cache purge");
+  const apiUrl = process.env.API_URL;
+  if (!apiUrl) {
+    logger.debug("[CLOUDFLARE] API_URL not configured, skipping cache purge");
     return true;
   }
 
   // Purge both the API endpoint and any potential frontend route
   const urls = [
-    `${publicUrl}/api/public-notes/${slug}`,
-    `${publicUrl}/p/${slug}`, // Frontend route if exists
+    `${apiUrl}/api/public-notes/${slug}`,
+    `${apiUrl}/p/${slug}`, // Frontend route if exists
   ];
 
   return purgeCloudflareCache(urls);
