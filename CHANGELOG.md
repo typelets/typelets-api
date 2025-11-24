@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/typelets/typelets-api/compare/v1.16.7...v1.17.0) (2025-11-24)
+
+
+### Features
+
+* add public notes caching and public count to notes endpoint ([6436058](https://github.com/typelets/typelets-api/commit/64360585fac92fcf477550e3da74064dc46ad45f))
+
 ## [1.16.7](https://github.com/typelets/typelets-api/compare/v1.16.6...v1.16.7) (2025-11-24)
 
 
