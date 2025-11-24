@@ -127,7 +127,7 @@ export const createFolderRequestSchema = z
       .openapi({ example: "Work Projects", description: "Folder name (1-100 characters)" }),
     color: z
       .string()
-      .regex(/^#[0-9A-F]{6}$/i)
+      .regex(/^#[0-9A-Fa-f]{6}$/)
       .nullable()
       .optional()
       .openapi({ example: "#3b82f6", description: "Folder color (hex format #RRGGBB)" }),
@@ -154,7 +154,7 @@ export const updateFolderRequestSchema = z
       .openapi({ example: "Updated Folder Name", description: "Folder name (1-100 characters)" }),
     color: z
       .string()
-      .regex(/^#[0-9A-F]{6}$/i)
+      .regex(/^#[0-9A-Fa-f]{6}$/)
       .nullable()
       .optional()
       .openapi({ example: "#ef4444", description: "Folder color (hex format #RRGGBB)" }),

@@ -11,7 +11,7 @@ export const createFolderSchema = z.object({
   name: z.string().min(1, "Folder name is required").max(100),
   color: z
     .string()
-    .regex(/^#[0-9A-F]{6}$/i, "Invalid color format")
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Invalid color format")
     .optional(),
   parentId: z.string().uuid().optional(),
   isDefault: z.boolean().optional(),
@@ -21,7 +21,7 @@ export const updateFolderSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   color: z
     .string()
-    .regex(/^#[0-9A-F]{6}$/i)
+    .regex(/^#[0-9A-Fa-f]{6}$/)
     .optional(),
   parentId: z.string().uuid().nullable().optional(),
 });
