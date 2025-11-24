@@ -19,6 +19,9 @@ export const CacheKeys = {
 
   // Attachment-related
   noteAttachments: (noteId: string) => `attachments:note:${noteId}`,
+
+  // Public notes (no auth required, cached by slug)
+  publicNote: (slug: string) => `public:note:${slug}`,
 } as const;
 
 // Cache TTL values (in seconds)
@@ -34,4 +37,5 @@ export const CacheTTL = {
   notesDeleted: 300, // 5 minutes
   notesCounts: 120, // 2 minutes
   noteAttachments: 1800, // 30 minutes
+  publicNote: 86400, // 24 hours (same as Cloudflare CDN)
 } as const;

@@ -1,10 +1,11 @@
 import { OpenAPIHono, createRoute, RouteHandler } from "@hono/zod-openapi";
-import { db, folders } from "../../db";
+import { db, folders, publicNotes } from "../../db";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { getCache, setCache } from "../../lib/cache";
 import { CacheKeys, CacheTTL } from "../../lib/cache-keys";
 import { z } from "@hono/zod-openapi";
 import { logger } from "../../lib/logger";
+import { noteCountsSchema, folderCountsSchema } from "../../lib/openapi-schemas";
 
 const countsRouter = new OpenAPIHono();
 
@@ -54,11 +55,12 @@ async function getCountsForFolders(
 ): Promise<{
   all: number;
   starred: number;
+  public: number;
   archived: number;
   trash: number;
 }> {
   if (folderIds.length === 0) {
-    return { all: 0, starred: 0, archived: 0, trash: 0 };
+    return { all: 0, starred: 0, public: 0, archived: 0, trash: 0 };
   }
 
   const queryStart = Date.now();
@@ -66,17 +68,20 @@ async function getCountsForFolders(
   const result = await db.execute<{
     all_count: string;
     starred_count: string;
+    public_count: string;
     archived_count: string;
     trash_count: string;
   }>(sql`
     SELECT
-      COUNT(*) FILTER (WHERE deleted = false AND archived = false) as all_count,
-      COUNT(*) FILTER (WHERE starred = true AND deleted = false AND archived = false) as starred_count,
-      COUNT(*) FILTER (WHERE archived = true AND deleted = false) as archived_count,
-      COUNT(*) FILTER (WHERE deleted = true) as trash_count
-    FROM notes
-    WHERE user_id = ${userId}
-      AND folder_id IN (${sql.join(
+      COUNT(*) FILTER (WHERE n.deleted = false AND n.archived = false) as all_count,
+      COUNT(*) FILTER (WHERE n.starred = true AND n.deleted = false AND n.archived = false) as starred_count,
+      COUNT(*) FILTER (WHERE pn.id IS NOT NULL AND n.deleted = false AND n.archived = false) as public_count,
+      COUNT(*) FILTER (WHERE n.archived = true AND n.deleted = false) as archived_count,
+      COUNT(*) FILTER (WHERE n.deleted = true) as trash_count
+    FROM notes n
+    LEFT JOIN public_notes pn ON pn.note_id = n.id
+    WHERE n.user_id = ${userId}
+      AND n.folder_id IN (${sql.join(
         folderIds.map((id) => sql`${id}`),
         sql`, `
       )})
@@ -86,6 +91,7 @@ async function getCountsForFolders(
   const rows = result as unknown as {
     all_count: string;
     starred_count: string;
+    public_count: string;
     archived_count: string;
     trash_count: string;
   }[];
@@ -93,6 +99,7 @@ async function getCountsForFolders(
   return {
     all: parseInt(row.all_count),
     starred: parseInt(row.starred_count),
+    public: parseInt(row.public_count),
     archived: parseInt(row.archived_count),
     trash: parseInt(row.trash_count),
   };
@@ -105,22 +112,26 @@ export async function warmNotesCountsCache(userId: string): Promise<void> {
   const totalCountsResult = await db.execute<{
     all_count: string;
     starred_count: string;
+    public_count: string;
     archived_count: string;
     trash_count: string;
   }>(sql`
     SELECT
-      COUNT(*) FILTER (WHERE deleted = false AND archived = false) as all_count,
-      COUNT(*) FILTER (WHERE starred = true AND deleted = false AND archived = false) as starred_count,
-      COUNT(*) FILTER (WHERE archived = true AND deleted = false) as archived_count,
-      COUNT(*) FILTER (WHERE deleted = true) as trash_count
-    FROM notes
-    WHERE user_id = ${userId}
+      COUNT(*) FILTER (WHERE n.deleted = false AND n.archived = false) as all_count,
+      COUNT(*) FILTER (WHERE n.starred = true AND n.deleted = false AND n.archived = false) as starred_count,
+      COUNT(*) FILTER (WHERE pn.id IS NOT NULL AND n.deleted = false AND n.archived = false) as public_count,
+      COUNT(*) FILTER (WHERE n.archived = true AND n.deleted = false) as archived_count,
+      COUNT(*) FILTER (WHERE n.deleted = true) as trash_count
+    FROM notes n
+    LEFT JOIN public_notes pn ON pn.note_id = n.id
+    WHERE n.user_id = ${userId}
   `);
   logger.databaseQuery("count_aggregate", "notes", Date.now() - totalCountsStart, userId);
 
   const totalCountsRows = totalCountsResult as unknown as {
     all_count: string;
     starred_count: string;
+    public_count: string;
     archived_count: string;
     trash_count: string;
   }[];
@@ -139,6 +150,7 @@ export async function warmNotesCountsCache(userId: string): Promise<void> {
     {
       all: number;
       starred: number;
+      public: number;
       archived: number;
       trash: number;
     }
@@ -171,6 +183,7 @@ export async function warmNotesCountsCache(userId: string): Promise<void> {
   const counts = {
     all: parseInt(totalCounts.all_count),
     starred: parseInt(totalCounts.starred_count),
+    public: parseInt(totalCounts.public_count),
     archived: parseInt(totalCounts.archived_count),
     trash: parseInt(totalCounts.trash_count),
     folders: folderCounts,
@@ -204,25 +217,10 @@ const getNotesCountsRoute = createRoute({
   responses: {
     200: {
       description:
-        "Note counts retrieved successfully. Without folder_id: returns {all, starred, archived, trash, folders}. With folder_id: returns Record<folderId, {all, starred, archived, trash}>",
+        "Note counts retrieved successfully. Without folder_id: returns {all, starred, public, archived, trash, folders}. With folder_id: returns Record<folderId, {all, starred, public, archived, trash}>",
       content: {
         "application/json": {
-          schema: z.any().openapi({
-            example: {
-              all: 42,
-              starred: 5,
-              archived: 12,
-              trash: 3,
-              folders: {
-                "123e4567-e89b-12d3-a456-426614174000": {
-                  all: 10,
-                  starred: 2,
-                  archived: 1,
-                  trash: 0,
-                },
-              },
-            },
-          }),
+          schema: z.union([noteCountsSchema, folderCountsSchema]),
         },
       },
     },
@@ -250,6 +248,7 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
           {
             all: number;
             starred: number;
+            public: number;
             archived: number;
             trash: number;
           }
@@ -298,6 +297,7 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
         {
           all: number;
           starred: number;
+          public: number;
           archived: number;
           trash: number;
         }
@@ -320,6 +320,7 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
     const cachedCounts = await getCache<{
       all: number;
       starred: number;
+      public: number;
       archived: number;
       trash: number;
       folders: Record<
@@ -327,6 +328,7 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
         {
           all: number;
           starred: number;
+          public: number;
           archived: number;
           trash: number;
         }
@@ -342,22 +344,26 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
     const totalCountsResult = await db.execute<{
       all_count: string;
       starred_count: string;
+      public_count: string;
       archived_count: string;
       trash_count: string;
     }>(sql`
       SELECT
-        COUNT(*) FILTER (WHERE deleted = false AND archived = false) as all_count,
-        COUNT(*) FILTER (WHERE starred = true AND deleted = false AND archived = false) as starred_count,
-        COUNT(*) FILTER (WHERE archived = true AND deleted = false) as archived_count,
-        COUNT(*) FILTER (WHERE deleted = true) as trash_count
-      FROM notes
-      WHERE user_id = ${userId}
+        COUNT(*) FILTER (WHERE n.deleted = false AND n.archived = false) as all_count,
+        COUNT(*) FILTER (WHERE n.starred = true AND n.deleted = false AND n.archived = false) as starred_count,
+        COUNT(*) FILTER (WHERE pn.id IS NOT NULL AND n.deleted = false AND n.archived = false) as public_count,
+        COUNT(*) FILTER (WHERE n.archived = true AND n.deleted = false) as archived_count,
+        COUNT(*) FILTER (WHERE n.deleted = true) as trash_count
+      FROM notes n
+      LEFT JOIN public_notes pn ON pn.note_id = n.id
+      WHERE n.user_id = ${userId}
     `);
     logger.databaseQuery("count_aggregate", "notes", Date.now() - totalCountsStart, userId);
 
     const totalCountsRows = totalCountsResult as unknown as {
       all_count: string;
       starred_count: string;
+      public_count: string;
       archived_count: string;
       trash_count: string;
     }[];
@@ -376,6 +382,7 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
       {
         all: number;
         starred: number;
+        public: number;
         archived: number;
         trash: number;
       }
@@ -408,6 +415,7 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
     const counts = {
       all: parseInt(totalCounts.all_count),
       starred: parseInt(totalCounts.starred_count),
+      public: parseInt(totalCounts.public_count),
       archived: parseInt(totalCounts.archived_count),
       trash: parseInt(totalCounts.trash_count),
       folders: folderCounts,
@@ -448,25 +456,10 @@ const getNotesCountsRouteSlash = createRoute({
   responses: {
     200: {
       description:
-        "Note counts retrieved successfully. Without folder_id: returns {all, starred, archived, trash, folders}. With folder_id: returns Record<folderId, {all, starred, archived, trash}>",
+        "Note counts retrieved successfully. Without folder_id: returns {all, starred, public, archived, trash, folders}. With folder_id: returns Record<folderId, {all, starred, public, archived, trash}>",
       content: {
         "application/json": {
-          schema: z.any().openapi({
-            example: {
-              all: 42,
-              starred: 5,
-              archived: 12,
-              trash: 3,
-              folders: {
-                "123e4567-e89b-12d3-a456-426614174000": {
-                  all: 10,
-                  starred: 2,
-                  archived: 1,
-                  trash: 0,
-                },
-              },
-            },
-          }),
+          schema: z.union([noteCountsSchema, folderCountsSchema]),
         },
       },
     },

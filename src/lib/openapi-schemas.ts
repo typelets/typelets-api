@@ -255,6 +255,7 @@ export const reorderFolderResponseSchema = z
 const countsObjectSchema = z.object({
   all: z.number().openapi({ example: 10, description: "Active notes count" }),
   starred: z.number().openapi({ example: 2, description: "Starred notes count" }),
+  public: z.number().openapi({ example: 1, description: "Published notes count" }),
   archived: z.number().openapi({ example: 1, description: "Archived notes count" }),
   trash: z.number().openapi({ example: 0, description: "Deleted notes count" }),
 });
@@ -263,12 +264,25 @@ export const noteCountsSchema = z
   .object({
     all: z.number().openapi({ example: 42, description: "Total active notes count" }),
     starred: z.number().openapi({ example: 5, description: "Total starred notes count" }),
+    public: z.number().openapi({ example: 3, description: "Total published notes count" }),
     archived: z.number().openapi({ example: 12, description: "Total archived notes count" }),
     trash: z.number().openapi({ example: 3, description: "Total deleted notes count" }),
     folders: z.record(z.string(), countsObjectSchema).openapi({
       example: {
-        "123e4567-e89b-12d3-a456-426614174000": { all: 10, starred: 2, archived: 1, trash: 0 },
-        "223e4567-e89b-12d3-a456-426614174001": { all: 5, starred: 1, archived: 0, trash: 0 },
+        "123e4567-e89b-12d3-a456-426614174000": {
+          all: 10,
+          starred: 2,
+          public: 1,
+          archived: 1,
+          trash: 0,
+        },
+        "223e4567-e89b-12d3-a456-426614174001": {
+          all: 5,
+          starred: 1,
+          public: 0,
+          archived: 0,
+          trash: 0,
+        },
       },
       description:
         "Counts for each root-level folder (folder IDs as keys, includes descendant notes)",

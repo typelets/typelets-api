@@ -14,6 +14,9 @@ import { eq, and } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { logger } from "../../lib/logger";
 import DOMPurify from "isomorphic-dompurify";
+import { purgePublicNoteCache, getPublicNoteCacheHeaders } from "../../lib/cloudflare-cache";
+import { getCache, setCache, deleteCache } from "../../lib/cache";
+import { CacheKeys, CacheTTL } from "../../lib/cache-keys";
 
 const crudRouter = new OpenAPIHono();
 
@@ -238,6 +241,35 @@ const getPublicNoteRoute = createRoute({
 crudRouter.openapi(getPublicNoteRoute, async (c) => {
   const { slug } = c.req.valid("param");
 
+  // 1. Check Upstash Redis cache first
+  const cacheKey = CacheKeys.publicNote(slug);
+  const cached = await getCache<{
+    slug: string;
+    title: string;
+    content: string;
+    type: string;
+    authorName: string | null;
+    publishedAt: Date;
+    updatedAt: Date;
+  }>(cacheKey);
+
+  if (cached) {
+    logger.info("[PUBLIC API] Public note served from cache", {
+      type: "public_api_event",
+      event_type: "public_note_cache_hit",
+      slug,
+    });
+
+    // Set cache headers for Cloudflare CDN
+    const cacheHeaders = getPublicNoteCacheHeaders();
+    for (const [key, value] of Object.entries(cacheHeaders)) {
+      c.header(key, value);
+    }
+
+    return c.json(cached, 200);
+  }
+
+  // 2. Cache miss - query database
   const selectStart = Date.now();
   const publicNote = await db.query.publicNotes.findFirst({
     where: eq(publicNotes.slug, slug),
@@ -263,11 +295,20 @@ crudRouter.openapi(getPublicNoteRoute, async (c) => {
     throw new HTTPException(404, { message: "Public note not found" });
   }
 
+  // 3. Store in Redis cache
+  await setCache(cacheKey, publicNote, CacheTTL.publicNote);
+
   logger.info("[PUBLIC API] Public note viewed", {
     type: "public_api_event",
     event_type: "public_note_viewed",
     slug,
   });
+
+  // Set cache headers for Cloudflare CDN
+  const cacheHeaders = getPublicNoteCacheHeaders();
+  for (const [key, value] of Object.entries(cacheHeaders)) {
+    c.header(key, value);
+  }
 
   return c.json(publicNote, 200);
 });
@@ -363,6 +404,10 @@ crudRouter.openapi(updatePublicNoteRoute, async (c) => {
     slug,
   });
 
+  // Invalidate both caches
+  await deleteCache(CacheKeys.publicNote(slug)); // Upstash Redis
+  await purgePublicNoteCache(slug); // Cloudflare CDN
+
   return c.json(updatedPublicNote, 200);
 });
 
@@ -431,6 +476,10 @@ crudRouter.openapi(unpublishNoteRoute, async (c) => {
     slug,
     noteId: existingPublicNote.noteId,
   });
+
+  // Invalidate both caches
+  await deleteCache(CacheKeys.publicNote(slug)); // Upstash Redis
+  await purgePublicNoteCache(slug); // Cloudflare CDN
 
   return c.json({ message: "Note unpublished successfully" }, 200);
 });
