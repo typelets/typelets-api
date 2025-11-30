@@ -28,6 +28,7 @@ export const folders = pgTable(
   (table) => ({
     userIdIdx: index("idx_folders_user_id").on(table.userId),
     userSortIdx: index("idx_folders_user_sort").on(table.userId, table.sortOrder.asc()),
+    parentIdIdx: index("idx_folders_parent_id").on(table.parentId),
   })
 );
 
@@ -44,7 +45,7 @@ export const notes = pgTable(
 
     title: text("title").notNull(),
     content: text("content").default(""),
-    type: text("type", { enum: ["note", "diagram", "code"] })
+    type: text("type", { enum: ["note", "diagram", "code", "sheets"] })
       .default("note")
       .notNull(),
 
@@ -68,6 +69,13 @@ export const notes = pgTable(
     folderIdIdx: index("idx_notes_folder_id").on(table.folderId),
     userUpdatedIdx: index("idx_notes_user_updated").on(table.userId, table.updatedAt.desc()),
     typeIdx: index("idx_notes_type").on(table.type),
+    // Composite indexes for common query patterns
+    userDeletedArchivedIdx: index("idx_notes_user_deleted_archived").on(
+      table.userId,
+      table.deleted,
+      table.archived
+    ),
+    userStarredIdx: index("idx_notes_user_starred").on(table.userId, table.starred, table.deleted),
   })
 );
 
@@ -166,7 +174,7 @@ export const publicNotes = pgTable(
       .notNull(),
     title: text("title").notNull(), // Plaintext title (NOT encrypted)
     content: text("content").notNull(), // Plaintext HTML content (NOT encrypted)
-    type: text("type", { enum: ["note", "diagram", "code"] })
+    type: text("type", { enum: ["note", "diagram", "code", "sheets"] })
       .default("note")
       .notNull(),
     authorName: text("author_name"), // Optional display name

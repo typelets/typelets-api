@@ -48,6 +48,56 @@ async function getAllDescendantFolderIds(
   return (result as unknown as { id: string }[]).map((row) => row.id);
 }
 
+// Batched version: Get descendants for multiple root folders, grouped by root
+async function getAllDescendantsByRootFolder(
+  rootFolderIds: string[],
+  userId: string
+): Promise<Map<string, string[]>> {
+  if (rootFolderIds.length === 0) {
+    return new Map();
+  }
+
+  const queryStart = Date.now();
+  // Single query that tracks which root folder each descendant belongs to
+  const result = await db.execute<{ root_id: string; descendant_id: string }>(sql`
+    WITH RECURSIVE folder_tree AS (
+      -- Base case: start with root folders, track the root_id
+      SELECT id as root_id, id as descendant_id, parent_id
+      FROM folders
+      WHERE id IN (${sql.join(
+        rootFolderIds.map((id) => sql`${id}`),
+        sql`, `
+      )})
+        AND user_id = ${userId}
+
+      UNION ALL
+
+      -- Recursive case: get children, preserve root_id
+      SELECT ft.root_id, f.id as descendant_id, f.parent_id
+      FROM folders f
+      INNER JOIN folder_tree ft ON f.parent_id = ft.descendant_id
+      WHERE f.user_id = ${userId}
+    )
+    SELECT DISTINCT root_id, descendant_id FROM folder_tree
+  `);
+  logger.databaseQuery("select_recursive", "folders", Date.now() - queryStart, userId);
+
+  // Group descendants by root folder
+  const folderMap = new Map<string, string[]>();
+  for (const rootId of rootFolderIds) {
+    folderMap.set(rootId, []);
+  }
+
+  for (const row of result as unknown as { root_id: string; descendant_id: string }[]) {
+    const descendants = folderMap.get(row.root_id);
+    if (descendants) {
+      descendants.push(row.descendant_id);
+    }
+  }
+
+  return folderMap;
+}
+
 // Optimized helper to get counts for multiple folders in a single query
 async function getCountsForFolders(
   folderIds: string[],
@@ -157,13 +207,9 @@ export async function warmNotesCountsCache(userId: string): Promise<void> {
   > = {};
 
   if (rootFolders.length > 0) {
-    // Build a map of folder ID to its descendants
-    const folderToDescendants = new Map<string, string[]>();
-
-    for (const rootFolder of rootFolders) {
-      const descendants = await getAllDescendantFolderIds(rootFolder.id, userId);
-      folderToDescendants.set(rootFolder.id, descendants);
-    }
+    // Get descendants for ALL root folders in a single query (batched)
+    const rootFolderIds = rootFolders.map((f) => f.id);
+    const folderToDescendants = await getAllDescendantsByRootFolder(rootFolderIds, userId);
 
     // Get counts for all folders in parallel
     const folderCountsPromises = Array.from(folderToDescendants.entries()).map(
@@ -273,14 +319,9 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
         return c.json({}, 200);
       }
 
-      // Build a map of folder ID to its descendants (including itself)
-      const folderToDescendants = new Map<string, string[]>();
-
-      for (const childFolder of childFolders) {
-        // Get descendants for this specific child
-        const descendants = await getAllDescendantFolderIds(childFolder.id, userId);
-        folderToDescendants.set(childFolder.id, descendants);
-      }
+      // Get descendants for ALL child folders in a single query (batched)
+      const childFolderIds = childFolders.map((f) => f.id);
+      const folderToDescendants = await getAllDescendantsByRootFolder(childFolderIds, userId);
 
       // Get counts for all folders in parallel
       const folderCountsPromises = Array.from(folderToDescendants.entries()).map(
@@ -389,13 +430,9 @@ const getNotesCountsHandler: RouteHandler<typeof getNotesCountsRoute> = async (c
     > = {};
 
     if (rootFolders.length > 0) {
-      // Build a map of folder ID to its descendants (including itself)
-      const folderToDescendants = new Map<string, string[]>();
-
-      for (const rootFolder of rootFolders) {
-        const descendants = await getAllDescendantFolderIds(rootFolder.id, userId);
-        folderToDescendants.set(rootFolder.id, descendants);
-      }
+      // Get descendants for ALL root folders in a single query (batched)
+      const rootFolderIds = rootFolders.map((f) => f.id);
+      const folderToDescendants = await getAllDescendantsByRootFolder(rootFolderIds, userId);
 
       // Get counts for all folders in parallel
       const folderCountsPromises = Array.from(folderToDescendants.entries()).map(
