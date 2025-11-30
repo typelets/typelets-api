@@ -1,3 +1,10 @@
+# [1.18.0](https://github.com/typelets/typelets-api/compare/v1.17.0...v1.18.0) (2025-11-30)
+
+
+### Features
+
+* optimize notes counts endpoint and add sheets note type ([6500247](https://github.com/typelets/typelets-api/commit/6500247ba534dbaa72eefe0cee33e6c7cd26871f))
+
 # [1.17.0](https://github.com/typelets/typelets-api/compare/v1.16.7...v1.17.0) (2025-11-24)
 
 
